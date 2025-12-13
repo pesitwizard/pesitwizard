@@ -82,7 +82,7 @@ env:
   valueFrom:
     fieldRef:
       fieldPath: metadata.namespace
-- name: PESIT_CLUSTER_ENABLED
+- name: VECTIS_CLUSTER_ENABLED
   value: "true"
 ```
 
@@ -105,7 +105,7 @@ rules:
 2. Un nouveau leader est élu parmi les pods restants
 3. Le nouveau leader :
    - Ajoute le label `vectis-leader=true` à son pod
-   - Démarre les serveurs Vectis configurés
+   - Démarre les serveurs PeSIT configurés
 4. Le LoadBalancer route vers le nouveau leader
 5. Les connexions en cours sont perdues (les clients doivent reconnecter)
 

@@ -7,7 +7,7 @@
 | `SPRING_DATASOURCE_URL` | URL JDBC PostgreSQL | - |
 | `SPRING_DATASOURCE_USERNAME` | Utilisateur DB | vectis |
 | `SPRING_DATASOURCE_PASSWORD` | Mot de passe DB | vectis |
-| `PESIT_CLUSTER_ENABLED` | Activer le clustering | false |
+| `VECTIS_CLUSTER_ENABLED` | Activer le clustering | false |
 | `POD_NAME` | Nom du pod (K8s) | - |
 | `POD_NAMESPACE` | Namespace (K8s) | default |
 
@@ -35,9 +35,9 @@ vectis:
     password: admin
 ```
 
-## Configuration des serveurs Vectis
+## Configuration des serveurs PeSIT
 
-Un serveur Vectis peut héberger plusieurs "serveurs logiques" sur différents ports.
+Un serveur Vectis peut héberger plusieurs "serveurs PeSIT logiques" sur différents ports.
 
 ### Via API
 
@@ -158,7 +158,7 @@ logging:
   level:
     com.vectis: INFO
     com.vectis.server.handler: DEBUG  # Détails des sessions
-    com.vectis.protocol: DEBUG        # Messages Vectis
+    com.vectis.protocol: DEBUG        # Messages PeSIT
 ```
 
 ### Métriques Prometheus

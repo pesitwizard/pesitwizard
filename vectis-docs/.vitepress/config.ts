@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'PeSIT Cloud',
+  title: 'Vectis',
   description: 'Solution moderne de transfert de fichiers bancaires',
   lang: 'fr-FR',
   
@@ -24,13 +24,13 @@ export default defineConfig({
         {
           text: 'Introduction',
           items: [
-            { text: 'Qu\'est-ce que PeSIT ?', link: '/guide/' },
+            { text: 'Qu\'est-ce que PeSIT ?', link: '/guide/' },  // PeSIT est le protocole
             { text: 'Démarrage rapide', link: '/guide/quickstart' },
             { text: 'Architecture', link: '/guide/architecture' }
           ]
         },
         {
-          text: 'Client PeSIT',
+          text: 'Vectis Client',
           items: [
             { text: 'Installation', link: '/guide/client/installation' },
             { text: 'Configuration', link: '/guide/client/configuration' },
@@ -39,7 +39,7 @@ export default defineConfig({
           ]
         },
         {
-          text: 'Serveur PeSIT',
+          text: 'Vectis Server',
           items: [
             { text: 'Installation', link: '/guide/server/installation' },
             { text: 'Configuration', link: '/guide/server/configuration' },
@@ -74,11 +74,11 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/cpoder/pesit' }
+      { icon: 'github', link: 'https://github.com/cpoder/vectis' }
     ],
 
     footer: {
-      message: 'Solution PeSIT moderne pour les entreprises',
+      message: 'Vectis - Solution PeSIT moderne pour les entreprises',
       copyright: 'Copyright © 2025'
     },
 

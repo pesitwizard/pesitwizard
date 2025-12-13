@@ -55,7 +55,7 @@ logging:
 
 ## Configuration des serveurs cibles
 
-Les serveurs Vectis cibles sont configurés via l'API ou l'interface web.
+Les serveurs PeSIT cibles sont configurés via l'API ou l'interface web.
 
 ### Via API
 
@@ -79,7 +79,7 @@ curl -X POST http://localhost:9081/api/servers \
 |-----------|-------------|-------------|
 | `name` | Nom affiché | Oui |
 | `host` | Adresse du serveur | Oui |
-| `port` | Port Vectis | Oui (défaut: 5000) |
+| `port` | Port PeSIT | Oui (défaut: 5000) |
 | `serverId` | Identifiant serveur (PI_04) | Oui |
 | `clientId` | Votre identifiant (PI_03) | Oui |
 | `password` | Mot de passe (PI_05) | Non |
@@ -87,7 +87,7 @@ curl -X POST http://localhost:9081/api/servers \
 
 ## Configuration TLS
 
-Pour les connexions sécurisées (Vectis-E) :
+Pour les connexions sécurisées (PeSIT-E) :
 
 ### Générer un keystore client
 
@@ -155,7 +155,7 @@ vectis:
 
 ## Logs et debug
 
-Pour activer les logs détaillés du protocole Vectis :
+Pour activer les logs détaillés du protocole PeSIT :
 
 ```yaml
 logging:

@@ -72,7 +72,7 @@ docker run -d \
   -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/vectis \
   -e SPRING_DATASOURCE_USERNAME=vectis \
   -e SPRING_DATASOURCE_PASSWORD=vectis \
-  -e PESIT_CLUSTER_ENABLED=false \
+  -e VECTIS_CLUSTER_ENABLED=false \
   -v vectis-data:/data \
   ghcr.io/cpoder/vectis-server:latest
 ```
@@ -184,7 +184,7 @@ spec:
               fieldPath: metadata.namespace
         - name: SPRING_DATASOURCE_URL
           value: jdbc:postgresql://postgres:5432/vectis
-        - name: PESIT_CLUSTER_ENABLED
+        - name: VECTIS_CLUSTER_ENABLED
           value: "true"
         readinessProbe:
           httpGet:

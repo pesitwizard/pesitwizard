@@ -4,12 +4,12 @@
 
 La sécurité du serveur Vectis repose sur plusieurs niveaux :
 
-1. **Authentification Vectis** : Identifiants partenaire/mot de passe
-2. **Chiffrement TLS** : Vectis-E sur TLS 1.2/1.3
+1. **Authentification PeSIT** : Identifiants partenaire/mot de passe
+2. **Chiffrement TLS** : PeSIT-E sur TLS 1.2/1.3
 3. **Authentification API** : Basic Auth ou JWT
 4. **Réseau** : Firewall, VPN, IP whitelisting
 
-## Authentification Vectis
+## Authentification PeSIT
 
 ### Configuration des partenaires
 
@@ -34,7 +34,7 @@ Recommandations :
 - Rotation tous les 90 jours
 - Pas de réutilisation des 5 derniers mots de passe
 
-## Chiffrement TLS (Vectis-E)
+## Chiffrement TLS (PeSIT-E)
 
 ### Générer les certificats serveur
 
@@ -98,7 +98,7 @@ vectis:
 
 ```bash
 # Via variable d'environnement
-docker run -e PESIT_ADMIN_PASSWORD=NouveauMotDePasse ...
+docker run -e VECTIS_ADMIN_PASSWORD=NouveauMotDePasse ...
 ```
 
 ### HTTPS pour l'API
@@ -129,12 +129,12 @@ Ports à ouvrir :
 
 | Port | Service | Accès |
 |------|---------|-------|
-| 5000 | Vectis | Partenaires uniquement |
+| 5000 | PeSIT | Partenaires uniquement |
 | 8080 | API REST | Interne uniquement |
 
 ### IP Whitelisting
 
-Restreindre l'accès Vectis aux IPs connues :
+Restreindre l'accès PeSIT aux IPs connues :
 
 ```yaml
 # NetworkPolicy Kubernetes
@@ -210,7 +210,7 @@ output.elasticsearch:
 ## Checklist sécurité
 
 - [ ] Mots de passe partenaires complexes
-- [ ] TLS activé (Vectis-E)
+- [ ] TLS activé (PeSIT-E)
 - [ ] Certificats valides et non expirés
 - [ ] API protégée par HTTPS
 - [ ] Mot de passe admin changé

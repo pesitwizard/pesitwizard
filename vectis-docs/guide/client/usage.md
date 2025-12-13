@@ -3,7 +3,7 @@
 ## Interface web
 
 L'interface web permet de :
-- Gérer les serveurs Vectis cibles
+- Gérer les serveurs PeSIT cibles
 - Envoyer et recevoir des fichiers
 - Consulter l'historique des transferts
 - Gérer les favoris et les planifications
@@ -57,8 +57,8 @@ Pour les transferts RECEIVE, vous pouvez utiliser des placeholders dynamiques da
 
 Résultat : `/data/received/PARTNER01/DATA_FILE_20251211_213000.dat`
 
-::: tip Note Vectis
-Le protocole Vectis ne transmet pas le nom du fichier physique, uniquement l'identifiant du fichier virtuel (PI 12). Les placeholders `${file}`, `${basename}`, `${ext}` ne sont donc pas disponibles.
+::: tip Note PeSIT
+Le protocole PeSIT ne transmet pas le nom du fichier physique, uniquement l'identifiant du fichier virtuel (PI 12). Les placeholders `${file}`, `${basename}`, `${ext}` ne sont donc pas disponibles.
 :::
 
 ## API REST

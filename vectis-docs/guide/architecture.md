@@ -53,7 +53,7 @@ Le **serveur** permet de recevoir des fichiers de partenaires externes.
 
 | Composant | Description | Port |
 |-----------|-------------|------|
-| vectis-server | Serveur Vectis + API | 5000 (Vectis), 8080 (HTTP) |
+| vectis-server | Serveur PeSIT + API | 5000 (PeSIT), 8080 (HTTP) |
 
 **Fonctionnalités** :
 - Réception de fichiers
@@ -136,7 +136,7 @@ vectis (database)
 ```
 1. Utilisateur upload fichier via UI
 2. Client API stocke le fichier temporairement
-3. Client API ouvre connexion Vectis vers la banque
+3. Client API ouvre connexion PeSIT vers la banque
 4. Échange CONNECT/ACONNECT
 5. Échange CREATE/ACK
 6. Envoi des données (DTF)
@@ -148,7 +148,7 @@ vectis (database)
 
 ```
 1. Utilisateur demande fichier via UI
-2. Client API ouvre connexion Vectis vers la banque
+2. Client API ouvre connexion PeSIT vers la banque
 3. Échange CONNECT/ACONNECT (mode lecture)
 4. Échange SELECT/ACK
 5. Réception des données (DTF)
