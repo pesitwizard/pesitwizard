@@ -415,6 +415,16 @@ public class PesitSessionHandler {
             transfer.setMaxEntitySize(parseNumeric(pi25.getValue()));
         }
 
+        // Extract PI 15 (Transfer Restart) - indicates this is a restart of a previous
+        // transfer
+        ParameterValue pi15 = fpdu.getParameter(ParameterIdentifier.PI_15_TRANSFERT_RELANCE);
+        if (pi15 != null && pi15.getValue() != null && pi15.getValue().length > 0) {
+            transfer.setRestart(pi15.getValue()[0] == 1);
+            if (transfer.isRestart()) {
+                log.info("[{}] CREATE: Transfer restart requested", ctx.getSessionId());
+            }
+        }
+
         // Extract logical attributes (PGI 30)
         ParameterValue pgi30 = fpdu.getParameter(ParameterGroupIdentifier.PGI_30_ATTR_LOGIQUES);
         if (pgi30 != null) {
@@ -512,6 +522,23 @@ public class PesitSessionHandler {
         ParameterValue pi13 = fpdu.getParameter(ParameterIdentifier.PI_13_ID_TRANSFERT);
         if (pi13 != null) {
             transfer.setTransferId(parseNumeric(pi13.getValue()));
+        }
+
+        // Extract PI 15 (Transfer Restart) - indicates this is a restart of a previous
+        // transfer
+        ParameterValue pi15 = fpdu.getParameter(ParameterIdentifier.PI_15_TRANSFERT_RELANCE);
+        if (pi15 != null && pi15.getValue() != null && pi15.getValue().length > 0) {
+            transfer.setRestart(pi15.getValue()[0] == 1);
+        }
+
+        // Extract PI 25 (Max Entity Size) for SELECT
+        ParameterValue pi25 = fpdu.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+        if (pi25 != null) {
+            transfer.setMaxEntitySize(parseNumeric(pi25.getValue()));
+        }
+
+        if (transfer.isRestart()) {
+            log.info("[{}] SELECT: Transfer restart requested", ctx.getSessionId());
         }
 
         // Validate logical file for SELECT (send)
@@ -946,7 +973,19 @@ public class PesitSessionHandler {
             return FpduResponseBuilder.buildAbort(ctx, DiagnosticCode.D2_205, "File not found");
         }
 
-        log.info("[{}] READ: starting data transmission for {}", ctx.getSessionId(), filePath);
+        // Extract PI 18 (Restart Point) - position to resume from
+        long restartPoint = 0;
+        ParameterValue pi18 = fpdu.getParameter(ParameterIdentifier.PI_18_POINT_RELANCE);
+        if (pi18 != null) {
+            restartPoint = parseNumeric(pi18.getValue());
+            transfer.setRestartPoint((int) restartPoint);
+        }
+
+        if (restartPoint > 0) {
+            log.info("[{}] READ: resuming from position {} for {}", ctx.getSessionId(), restartPoint, filePath);
+        } else {
+            log.info("[{}] READ: starting data transmission for {}", ctx.getSessionId(), filePath);
+        }
 
         // 1. Send ACK(READ)
         FpduIO.writeFpdu(out, FpduResponseBuilder.buildAckRead(ctx));
@@ -958,7 +997,14 @@ public class PesitSessionHandler {
         int recordCount = 0;
         byte[] buffer = new byte[maxChunkSize];
 
+        final long startPosition = restartPoint;
         try (java.io.InputStream fileIn = Files.newInputStream(filePath)) {
+            // Skip to restart point if resuming transfer
+            if (startPosition > 0) {
+                long skipped = fileIn.skip(startPosition);
+                log.info("[{}] READ: skipped {} bytes to resume position", ctx.getSessionId(), skipped);
+            }
+
             int bytesRead;
             while ((bytesRead = fileIn.read(buffer)) != -1) {
                 byte[] chunk = (bytesRead == buffer.length) ? buffer : java.util.Arrays.copyOf(buffer, bytesRead);
@@ -1075,6 +1121,10 @@ public class PesitSessionHandler {
 
     /**
      * Handle SYN (Synchronization Point) FPDU
+     * Sync points are checkpoints that allow transfer restart from a known
+     * position.
+     * When we acknowledge a sync point, we commit to having received all data up to
+     * that point.
      */
     private Fpdu handleSyn(SessionContext ctx, Fpdu fpdu) {
         ParameterValue pi20 = fpdu.getParameter(ParameterIdentifier.PI_20_NUM_SYNC);
@@ -1086,9 +1136,18 @@ public class PesitSessionHandler {
         TransferContext transfer = ctx.getCurrentTransfer();
         if (transfer != null) {
             transfer.setCurrentSyncPoint(syncPoint);
-        }
 
-        log.info("[{}] SYN: sync point {}", ctx.getSessionId(), syncPoint);
+            // Persist checkpoint: flush data received so far to disk for restart capability
+            long bytesAtCheckpoint = transfer.getBytesTransferred();
+
+            // Track sync point in database for potential restart
+            transferTracker.trackSyncPoint(ctx, bytesAtCheckpoint);
+
+            log.info("[{}] SYN: checkpoint {} at {} bytes",
+                    ctx.getSessionId(), syncPoint, bytesAtCheckpoint);
+        } else {
+            log.info("[{}] SYN: sync point {} (no active transfer)", ctx.getSessionId(), syncPoint);
+        }
 
         return FpduResponseBuilder.buildAckSyn(ctx, syncPoint);
     }

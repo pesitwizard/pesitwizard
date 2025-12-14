@@ -443,7 +443,13 @@ public class TransferService {
                 session.sendFpduWithAck(writeFpdu);
 
                 // DTF - send data in chunks using configured chunk size
+                // Send sync points periodically for restart capability
                 int offset = 0;
+                int chunkCount = 0;
+                int syncPointNumber = 0;
+                int syncPointInterval = config.getSyncPointInterval();
+                boolean syncPointsEnabled = config.isSyncPointsEnabled();
+
                 while (offset < data.length) {
                         int currentChunkSize = Math.min(chunkSize, data.length - offset);
                         byte[] chunk = new byte[currentChunkSize];
@@ -454,7 +460,19 @@ public class TransferService {
                                         .withIdSrc(connectionId);
                         session.sendFpduWithData(dtfFpdu, chunk);
                         offset += currentChunkSize;
+                        chunkCount++;
                         log.debug("Sent DTF chunk: {} bytes, total sent: {}/{}", currentChunkSize, offset, data.length);
+
+                        // Send sync point periodically for restart capability
+                        if (syncPointsEnabled && chunkCount % syncPointInterval == 0) {
+                                syncPointNumber++;
+                                Fpdu synFpdu = new Fpdu(FpduType.SYN)
+                                                .withIdDst(serverConnectionId)
+                                                .withIdSrc(connectionId)
+                                                .withParameter(new ParameterValue(PI_20_NUM_SYNC, syncPointNumber));
+                                session.sendFpduWithAck(synFpdu);
+                                log.info("Sync point {} acknowledged at {} bytes", syncPointNumber, offset);
+                        }
                 }
 
                 // DTF_END - signal end of data transfer (no ACK expected)
