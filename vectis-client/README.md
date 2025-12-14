@@ -1,38 +1,35 @@
-# PeSIT Client
+# Vectis Client
 
-Backend Spring Boot pour effectuer des transferts de fichiers via le protocole PeSIT. Expose une API REST utilisée par l'interface web `pesit-client-ui`.
+Client Java pour effectuer des transferts de fichiers via le protocole PeSIT. Expose une API REST utilisée par l'interface web `vectis-client-ui`.
 
 ## Fonctionnalités
 
 - **Envoi de fichiers** vers des serveurs PeSIT
 - **Réception de fichiers** depuis des serveurs PeSIT
 - **Gestion des serveurs** : Configuration de plusieurs serveurs PeSIT cibles
-- **Historique des transferts** : Stockage en base de données PostgreSQL
-- **API REST** : Interface programmatique pour intégration
+- **Historique des transferts** : Stockage en base de données
 
 ## Prérequis
 
 - Java 21+
 - Maven 3.9+
-- PostgreSQL (pour la persistance)
-- Bibliothèque `pesit-java-library` installée localement
 
 ## Build
 
 ```bash
 # Installer d'abord la bibliothèque PeSIT
-cd ../pesit-java-library
+cd ../vectis-pesit
 mvn install -DskipTests
 
 # Builder le client
-cd ../pesit-client
+cd ../vectis-client
 mvn package -DskipTests
 ```
 
 ## Exécution
 
 ```bash
-java -jar target/pesit-client-1.0.0-SNAPSHOT.jar
+java -jar target/vectis-client-1.0.0-SNAPSHOT.jar
 ```
 
 Le serveur démarre sur le port **9081**.
@@ -47,9 +44,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/pesit
-    username: pesit
-    password: pesit
+    url: jdbc:h2:file:./data/vectis-client-db
 ```
 
 ## API REST
@@ -77,34 +72,19 @@ curl -X POST http://localhost:9081/api/transfers/send \
   -H "Content-Type: multipart/form-data" \
   -F "file=@document.pdf" \
   -F "serverId=1" \
-  -F "remoteFilename=DOCUMENT.PDF" \
-  -F "partnerId=MY_PARTNER" \
-  -F "virtualFile=FILES"
-```
-
-### Exemple de réception
-
-```bash
-curl -X POST http://localhost:9081/api/transfers/receive \
-  -H "Content-Type: application/json" \
-  -d '{
-    "serverId": 1,
-    "remoteFilename": "REPORT.CSV",
-    "partnerId": "MY_PARTNER",
-    "virtualFile": "FILES"
-  }'
+  -F "remoteFilename=DOCUMENT.PDF"
 ```
 
 ## Docker
 
 ```bash
-docker build -t pesit-client .
-docker run -p 9081:9081 pesit-client
+docker build -t vectis-client .
+docker run -p 9081:9081 vectis-client
 ```
 
 ## Stack technique
 
 - Spring Boot 3.x
 - Java 21
-- PostgreSQL
-- pesit-java-library
+- H2 / PostgreSQL
+- vectis-pesit

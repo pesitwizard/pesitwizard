@@ -1,6 +1,6 @@
 # Vectis Documentation
 
-Site de documentation pour la solution Vectis Cloud, construit avec VitePress.
+Documentation open source pour Vectis, construit avec VitePress.
 
 ## Développement
 
@@ -31,22 +31,18 @@ vectis-docs/
 ├── public/
 │   └── api/               # Fichiers OpenAPI (OAS)
 │       ├── openapi-client.yaml
-│       ├── openapi-admin.yaml
 │       └── openapi-server.yaml
 ├── guide/
-│   ├── index.md           # Introduction
+│   ├── index.md           # Introduction (Qu'est-ce que PeSIT ?)
 │   ├── quickstart.md      # Démarrage rapide
 │   ├── architecture.md    # Architecture
 │   ├── client/            # Documentation client
-│   ├── server/            # Documentation serveur
-│   └── admin/             # Documentation admin
+│   └── server/            # Documentation serveur
 ├── api/
 │   ├── index.md           # Vue d'ensemble API
 │   ├── authentication.md  # Authentification
 │   ├── client.md          # Client API
-│   ├── admin.md           # Admin API
 │   └── server.md          # Server API
-├── pricing.md             # Page tarifs
 └── index.md               # Page d'accueil
 ```
 
@@ -135,7 +131,6 @@ docker run -p 8080:80 vectis-docs
 Les spécifications OpenAPI sont disponibles dans `public/api/` :
 
 - `openapi-client.yaml` - API Client (port 9081)
-- `openapi-admin.yaml` - API Admin (port 9080)
 - `openapi-server.yaml` - API Server (port 8080)
 
 Ces fichiers peuvent être importés dans Postman, Insomnia, ou utilisés pour générer des clients SDK.
