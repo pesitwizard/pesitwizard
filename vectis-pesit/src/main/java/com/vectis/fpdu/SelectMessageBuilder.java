@@ -16,6 +16,7 @@ public class SelectMessageBuilder {
     private int transferId = 1;
     private int priority = 0; // 0=normal
     private int maxEntitySize = 4096;
+    private int requestedAttributes = 0; // PI_14: 0 = all attributes
 
     public SelectMessageBuilder filename(String filename) {
         this.filename = filename;
@@ -47,6 +48,8 @@ public class SelectMessageBuilder {
 
         // PI 13: Transfer ID
         ParameterValue pi13 = new ParameterValue(PI_13_ID_TRANSFERT, transferId);
+        // PI 14: Requested Attributes (required by Connect:Express)
+        ParameterValue pi14 = new ParameterValue(PI_14_ATTRIBUTS_DEMANDES, requestedAttributes);
         // PI 17: Priority (mandatory for SELECT)
         ParameterValue pi17 = new ParameterValue(PI_17_PRIORITE, priority);
         // PI 25: Max Entity Size (mandatory for SELECT)
@@ -56,6 +59,7 @@ public class SelectMessageBuilder {
         return new Fpdu(FpduType.SELECT)
                 .withParameter(pgi9)
                 .withParameter(pi13)
+                .withParameter(pi14)
                 .withParameter(pi17)
                 .withParameter(pi25)
                 .withIdDst(serverConnectionId);
