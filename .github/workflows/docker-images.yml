@@ -37,7 +37,7 @@ jobs:
         working-directory: vectis-connector-api
 
       - name: Build vectis-client
-        run: mvn -B package -DskipTests
+        run: mvn -B install -DskipTests
         working-directory: vectis-client
 
       - name: Build vectis-server
