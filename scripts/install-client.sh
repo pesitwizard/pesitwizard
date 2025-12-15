@@ -130,6 +130,7 @@ prompt_value() {
     local varname="$3"
     
     if [ "$INTERACTIVE" = false ] || ! is_tty; then
+        echo -e "$prompt: ${BLUE}$default${NC} (auto)"
         eval "$varname=\"$default\""
         return
     fi
