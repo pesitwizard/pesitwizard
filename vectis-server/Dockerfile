@@ -7,8 +7,8 @@ RUN addgroup -g 1000 pesit && \
 
 WORKDIR /app
 
-# Copy the pre-built JAR
-COPY target/vectis-server-*.jar app.jar
+# Copy the pre-built JAR (exec classifier for Spring Boot fat JAR)
+COPY target/vectis-server-*-exec.jar app.jar
 
 # Create directories for data
 RUN mkdir -p /data/db /data/received /data/send /app/config/jgroups && \
