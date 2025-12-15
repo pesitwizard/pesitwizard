@@ -52,6 +52,8 @@ management:
       enabled: true
     readinessState:
       enabled: true
+    db:
+      enabled: false
   # OTLP metrics - disabled by default, enable with OTEL_EXPORTER_OTLP_ENDPOINT
   otlp:
     metrics:
