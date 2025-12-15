@@ -28,10 +28,17 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build dependencies
-        run: |
-          mvn -B install -DskipTests -pl vectis-pesit,vectis-connector-api -am
-          mvn -B package -DskipTests -pl vectis-client
+      - name: Build vectis-pesit
+        run: mvn -B install -DskipTests
+        working-directory: vectis-pesit
+
+      - name: Build vectis-connector-api
+        run: mvn -B install -DskipTests
+        working-directory: vectis-connector-api
+
+      - name: Build vectis-client
+        run: mvn -B package -DskipTests
+        working-directory: vectis-client
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
