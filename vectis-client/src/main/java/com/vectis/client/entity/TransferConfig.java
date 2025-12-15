@@ -39,11 +39,11 @@ public class TransferConfig {
 
     private String description;
 
-    /** Chunk size for data transfer in bytes (default 32KB) */
+    /** Chunk size for data transfer in bytes */
     @Builder.Default
-    @Min(1024)
+    @Min(56)
     @Max(1048576)
-    private Integer chunkSize = 4096; // Reduced for Connect:Express compatibility
+    private Integer chunkSize = 256; // Small value for Connect:Express compatibility
 
     /** Enable compression (PI 21) */
     @Builder.Default
@@ -95,7 +95,7 @@ public class TransferConfig {
 
     /** Record length (for fixed format) */
     @Builder.Default
-    private Integer recordLength = 0;
+    private Integer recordLength = 1024;
 
     /** Data code: A=ASCII, E=EBCDIC, B=Binary */
     @Builder.Default

@@ -466,13 +466,15 @@ public class TransferService {
 
                 // CREATE - use CreateMessageBuilder for correct structure
                 int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF; // PI_13 is 3 bytes max
+                // Use small values known to work with Connect:Express
+                int effectiveRecordLength = recordLength > 0 ? Math.min(recordLength, 1024) : 30;
+                int effectiveMaxEntity = Math.min(chunkSize, 4096);
                 Fpdu createFpdu = new CreateMessageBuilder()
                                 .filename(virtualFile)
                                 .transferId(transferId)
-                                .priority(priority)
                                 .variableFormat()
-                                .recordLength(recordLength)
-                                .maxEntitySize(chunkSize)
+                                .recordLength(effectiveRecordLength)
+                                .maxEntitySize(effectiveMaxEntity)
                                 .build(serverConnectionId);
 
                 session.sendFpduWithAck(createFpdu);
@@ -578,7 +580,8 @@ public class TransferService {
                                 .withIdDst(serverConnectionId)
                                 .withParameter(pgi9)
                                 .withParameter(new ParameterValue(PI_13_ID_TRANSFERT, transferId))
-                                .withParameter(new ParameterValue(PI_17_PRIORITE, config.getPriority()))
+                                .withParameter(new ParameterValue(PI_14_ATTRIBUTS_DEMANDES, 0)) // Required by C:X
+                                .withParameter(new ParameterValue(PI_17_PRIORITE, 0))
                                 .withParameter(new ParameterValue(PI_25_TAILLE_MAX_ENTITE, chunkSize));
                 session.sendFpduWithAck(selectFpdu);
 
