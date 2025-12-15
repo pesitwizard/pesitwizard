@@ -100,6 +100,37 @@ docker build -t vectis-server ./vectis-server
 docker run -p 5000:5000 -p 8080:8080 vectis-server
 ```
 
+## Kubernetes
+
+### Installation rapide
+
+**Client Vectis** (transfert de fichiers avec UI) :
+```bash
+curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/install-client.sh | bash
+```
+
+**Serveur Vectis** (standalone) :
+```bash
+curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/install-server.sh | bash
+```
+
+**Désinstallation** :
+```bash
+curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/uninstall.sh | bash
+```
+
+### Helm Charts
+
+Les charts Helm sont disponibles dans `vectis-helm-charts/` :
+- `vectis-client` : Client avec API et UI
+- `vectis-server` : Serveur standalone
+
+```bash
+# Installation manuelle avec Helm
+helm install vectis-client ./vectis-helm-charts/vectis-client -n vectis --create-namespace
+helm install vectis-server ./vectis-helm-charts/vectis-server -n vectis --create-namespace
+```
+
 ## Documentation
 
 - [Guide de démarrage](https://docs.vectis.cloud/guide/quickstart)
