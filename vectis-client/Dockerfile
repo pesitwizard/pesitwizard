@@ -11,7 +11,7 @@ WORKDIR /app
 COPY target/vectis-client-*-exec.jar app.jar
 
 # Create directories for data
-RUN mkdir -p /data && \
+RUN mkdir -p /data /app/data && \
     chown -R pesit:pesit /data /app
 
 # Switch to non-root user
