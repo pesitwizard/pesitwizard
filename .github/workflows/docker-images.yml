@@ -36,6 +36,24 @@ jobs:
         run: mvn -B install -DskipTests
         working-directory: vectis-connector-api
 
+      - name: Build vectis-connector-local
+        run: mvn -B install -DskipTests
+        working-directory: vectis-connector-local
+
+      - name: Build vectis-connector-sftp
+        run: mvn -B package -DskipTests
+        working-directory: vectis-connector-sftp
+
+      - name: Build vectis-connector-s3
+        run: mvn -B package -DskipTests
+        working-directory: vectis-connector-s3
+
+      - name: Prepare connectors for vectis-client
+        run: |
+          mkdir -p vectis-client/connectors
+          cp vectis-connector-sftp/target/vectis-connector-sftp-*.jar vectis-client/connectors/
+          cp vectis-connector-s3/target/vectis-connector-s3-*.jar vectis-client/connectors/
+
       - name: Build vectis-client
         run: mvn -B install -DskipTests
         working-directory: vectis-client

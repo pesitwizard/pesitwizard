@@ -10,8 +10,11 @@ WORKDIR /app
 # Copy the pre-built executable JAR (Spring Boot fat JAR)
 COPY target/vectis-client-*-exec.jar app.jar
 
+# Copy connector JARs (sftp, s3) - use wildcard to handle empty dir
+COPY connector[s]/ connectors/
+
 # Create directories for data
-RUN mkdir -p /data /app/data && \
+RUN mkdir -p /data /app/data /app/connectors && \
     chown -R vectis:vectis /data /app
 
 # Switch to non-root user

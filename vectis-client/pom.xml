@@ -50,6 +50,13 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- Vectis Local Filesystem Connector (built-in) -->
+        <dependency>
+            <groupId>com.vectis.connector</groupId>
+            <artifactId>vectis-connector-local</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
         <!-- Spring Boot Web for REST API -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
