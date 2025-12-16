@@ -28,14 +28,19 @@ spec:
     - host: {{ .host | quote }}
       http:
         paths:
-          {{- range .paths }}
-          - path: {{ .path }}
-            pathType: {{ .pathType }}
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "vectis-client.fullname" $ }}-api
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
             backend:
               service:
                 name: {{ include "vectis-client.fullname" $ }}-ui
                 port:
                   name: http
-          {{- end }}
     {{- end }}
 {{- end }}

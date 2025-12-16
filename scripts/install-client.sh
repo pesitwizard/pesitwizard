@@ -15,6 +15,7 @@ FORWARD_PORT=8080
 INSTALL_K3S=false
 INTERACTIVE=true
 STORAGE_PATH=""
+INGRESS_HOST="${INGRESS_HOST:-vectis.local}"
 
 # Colors
 RED='\033[0;31m'
@@ -55,6 +56,10 @@ parse_args() {
                 STORAGE_PATH="$2"
                 shift 2
                 ;;
+            --host)
+                INGRESS_HOST="$2"
+                shift 2
+                ;;
             --help|-h)
                 show_help
                 exit 0
@@ -74,11 +79,9 @@ show_help() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Options:"
-    echo "  -f, --port-forward      Start port forwarding after installation"
-    echo "  -p, --port PORT         Port for port forwarding (default: 8080)"
     echo "  -n, --namespace NAME    Kubernetes namespace (default: vectis)"
     echo "  -v, --version VERSION   Version/branch to install (default: main)"
-    echo "  -s, --storage PATH      Local storage path (default: ~/vectis-store)"
+    echo "      --host HOSTNAME     Ingress hostname (default: vectis.local)"
     echo "      --install-k3s       Install k3s if no Kubernetes cluster found"
     echo "  -y, --yes               Non-interactive mode, accept all defaults"
     echo "  -h, --help              Show this help message"
@@ -87,11 +90,11 @@ show_help() {
     echo "  # Basic installation"
     echo "  curl -fsSL https://raw.githubusercontent.com/cpoder/vectis/main/scripts/install-client.sh | bash"
     echo ""
-    echo "  # Install with port forwarding on port 9090"
-    echo "  curl -fsSL ... | bash -s -- --port-forward --port 9090"
+    echo "  # Install with custom hostname"
+    echo "  curl -fsSL ... | bash -s -- --host vectis.mycompany.com"
     echo ""
     echo "  # Install k3s if needed, then install Vectis"
-    echo "  curl -fsSL ... | bash -s -- --install-k3s --port-forward"
+    echo "  curl -fsSL ... | bash -s -- --install-k3s"
 }
 
 # Check if stdin is a terminal (for interactive prompts)
@@ -338,6 +341,9 @@ deploy_helm() {
     if [ -n "$DATA_PATH" ]; then
         HELM_ARGS="$HELM_ARGS --set persistence.data.hostPath=$DATA_PATH"
     fi
+    if [ -n "$INGRESS_HOST" ]; then
+        HELM_ARGS="$HELM_ARGS --set ingress.hosts[0].host=$INGRESS_HOST"
+    fi
     
     # Install or upgrade using local chart
     echo -e "${YELLOW}Installing Helm chart...${NC}"
@@ -366,54 +372,6 @@ deploy_helm() {
     echo -e "${GREEN}✓ Vectis Client installed${NC}"
 }
 
-# Start port forwarding
-start_port_forward() {
-    echo ""
-    echo -e "${YELLOW}Starting port forwarding on port $FORWARD_PORT...${NC}"
-    
-    # Check if port is in use
-    if command -v lsof &> /dev/null && lsof -i ":$FORWARD_PORT" &> /dev/null; then
-        echo -e "${YELLOW}Port $FORWARD_PORT is already in use${NC}"
-        if [ "$INTERACTIVE" = true ]; then
-            prompt_value "Enter a different port" "$((FORWARD_PORT + 1))" FORWARD_PORT
-        else
-            FORWARD_PORT=$((FORWARD_PORT + 1))
-            echo -e "${BLUE}Using port $FORWARD_PORT instead${NC}"
-        fi
-    fi
-    
-    echo -e "${GREEN}Starting port forwarding in background...${NC}"
-    echo -e "${BLUE}UI will be available at: http://localhost:$FORWARD_PORT${NC}"
-    echo ""
-    
-    # Start port-forward in background
-    kubectl port-forward svc/vectis-client-ui $FORWARD_PORT:80 -n "$VECTIS_NAMESPACE" &
-    PF_PID=$!
-    
-    # Give it a moment to start
-    sleep 2
-    
-    if kill -0 $PF_PID 2>/dev/null; then
-        echo -e "${GREEN}✓ Port forwarding started (PID: $PF_PID)${NC}"
-        echo ""
-        echo -e "${BLUE}Opening browser...${NC}"
-        
-        # Try to open browser
-        if command -v xdg-open &> /dev/null; then
-            xdg-open "http://localhost:$FORWARD_PORT" 2>/dev/null &
-        elif command -v open &> /dev/null; then
-            open "http://localhost:$FORWARD_PORT" 2>/dev/null &
-        fi
-        
-        echo ""
-        echo -e "${YELLOW}Press Ctrl+C to stop port forwarding${NC}"
-        wait $PF_PID
-    else
-        echo -e "${RED}Port forwarding failed to start${NC}"
-        return 1
-    fi
-}
-
 # Show access info
 show_access_info() {
     echo ""
@@ -423,14 +381,26 @@ show_access_info() {
     echo ""
     echo -e "${GREEN}Vectis Client is now installed.${NC}"
     echo ""
+    echo -e "${YELLOW}Access the UI:${NC}"
+    echo -e "  ${BLUE}http://$INGRESS_HOST${NC}"
+    echo ""
     
-    if [ "$PORT_FORWARD" = true ]; then
-        return
+    # Check if hostname resolves
+    if ! getent hosts "$INGRESS_HOST" &>/dev/null; then
+        echo -e "${YELLOW}Note: Add this entry to your /etc/hosts:${NC}"
+        # Get node IP
+        NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || echo "127.0.0.1")
+        echo -e "  ${BLUE}$NODE_IP  $INGRESS_HOST${NC}"
+        echo ""
+        
+        if [ "$INTERACTIVE" = true ]; then
+            if prompt_yn "Add entry to /etc/hosts now? (requires sudo)" "y"; then
+                echo "$NODE_IP  $INGRESS_HOST" | sudo tee -a /etc/hosts >/dev/null
+                echo -e "${GREEN}✓ Added to /etc/hosts${NC}"
+            fi
+        fi
     fi
     
-    echo "To access the UI:"
-    echo -e "  ${BLUE}kubectl port-forward svc/vectis-client-ui 8080:80 -n $VECTIS_NAMESPACE${NC}"
-    echo "  Then open: http://localhost:8080"
     echo ""
     echo "To check status:"
     echo -e "  ${BLUE}kubectl get pods -n $VECTIS_NAMESPACE${NC}"
@@ -438,14 +408,6 @@ show_access_info() {
     echo "To uninstall:"
     echo -e "  ${BLUE}helm uninstall vectis-client -n $VECTIS_NAMESPACE${NC}"
     echo ""
-    
-    # Ask about port forwarding if interactive
-    if [ "$INTERACTIVE" = true ]; then
-        if prompt_yn "Start port forwarding now?" "y"; then
-            prompt_value "Port to use" "8080" FORWARD_PORT
-            PORT_FORWARD=true
-        fi
-    fi
 }
 
 # Main
@@ -457,10 +419,6 @@ main() {
     configure_storage
     deploy_helm
     show_access_info
-    
-    if [ "$PORT_FORWARD" = true ]; then
-        start_port_forward
-    fi
 }
 
 main "$@"

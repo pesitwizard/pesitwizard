@@ -45,14 +45,11 @@ ui:
 
 # Ingress configuration
 ingress:
-  enabled: false
-  className: nginx
+  enabled: true
+  className: ""  # Empty for default (traefik on k3s)
   annotations: {}
   hosts:
-    - host: vectis-client.local
-      paths:
-        - path: /
-          pathType: Prefix
+    - host: vectis.local
   tls: []
 
 # Persistence configuration
