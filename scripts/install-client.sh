@@ -14,6 +14,7 @@ INSTALL_K3S=false
 INTERACTIVE=true
 STORAGE_PATH=""
 INGRESS_HOST="${INGRESS_HOST:-vectis.local}"
+INGRESS_PORT=""  # Ingress Controller port (default: 80)
 NODE_PORT=""  # If set, use NodePort instead of Ingress
 
 # Colors
@@ -261,6 +262,87 @@ setup_namespace() {
     echo -e "${GREEN}✓ Namespace '$VECTIS_NAMESPACE' ready${NC}"
 }
 
+# Detect and configure Ingress Controller port
+configure_ingress_port() {
+    # Skip if using NodePort
+    if [ -n "$NODE_PORT" ]; then
+        return
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}Ingress Configuration${NC}"
+    
+    # Detect Ingress Controller
+    INGRESS_TYPE=""
+    INGRESS_SVC=""
+    INGRESS_NS=""
+    
+    # Check for Traefik (k3s default)
+    if kubectl get svc traefik -n kube-system &>/dev/null; then
+        INGRESS_TYPE="traefik"
+        INGRESS_SVC="traefik"
+        INGRESS_NS="kube-system"
+    # Check for Traefik in traefik namespace
+    elif kubectl get svc traefik -n traefik &>/dev/null; then
+        INGRESS_TYPE="traefik"
+        INGRESS_SVC="traefik"
+        INGRESS_NS="traefik"
+    # Check for nginx-ingress
+    elif kubectl get svc ingress-nginx-controller -n ingress-nginx &>/dev/null; then
+        INGRESS_TYPE="nginx"
+        INGRESS_SVC="ingress-nginx-controller"
+        INGRESS_NS="ingress-nginx"
+    fi
+    
+    if [ -z "$INGRESS_TYPE" ]; then
+        echo -e "${YELLOW}No Ingress Controller detected.${NC}"
+        echo -e "${BLUE}You may need to install one (e.g., Traefik, nginx-ingress)${NC}"
+        return
+    fi
+    
+    echo -e "${GREEN}✓ Detected: $INGRESS_TYPE in namespace $INGRESS_NS${NC}"
+    
+    # Get current port
+    CURRENT_PORT=$(kubectl get svc "$INGRESS_SVC" -n "$INGRESS_NS" -o jsonpath='{.spec.ports[?(@.name=="web")].port}' 2>/dev/null)
+    if [ -z "$CURRENT_PORT" ]; then
+        CURRENT_PORT=$(kubectl get svc "$INGRESS_SVC" -n "$INGRESS_NS" -o jsonpath='{.spec.ports[?(@.port==80)].port}' 2>/dev/null)
+    fi
+    CURRENT_PORT="${CURRENT_PORT:-80}"
+    
+    echo -e "${BLUE}Current HTTP port: $CURRENT_PORT${NC}"
+    
+    if [ "$INTERACTIVE" = true ]; then
+        if [ -z "$INGRESS_PORT" ]; then
+            prompt_value "Ingress HTTP port" "$CURRENT_PORT" INGRESS_PORT
+        fi
+        
+        if [ "$INGRESS_PORT" != "$CURRENT_PORT" ]; then
+            echo -e "${YELLOW}Configuring $INGRESS_TYPE to use port $INGRESS_PORT...${NC}"
+            
+            if [ "$INGRESS_TYPE" = "traefik" ]; then
+                # Patch Traefik service
+                kubectl patch svc "$INGRESS_SVC" -n "$INGRESS_NS" --type='json' \
+                    -p="[{\"op\": \"replace\", \"path\": \"/spec/ports/0/port\", \"value\": $INGRESS_PORT}]" 2>/dev/null || true
+                
+                # For NodePort, also update nodePort if applicable
+                SVC_TYPE=$(kubectl get svc "$INGRESS_SVC" -n "$INGRESS_NS" -o jsonpath='{.spec.type}')
+                if [ "$SVC_TYPE" = "LoadBalancer" ] || [ "$SVC_TYPE" = "NodePort" ]; then
+                    # Try to set nodePort as well (may fail if port is out of range)
+                    kubectl patch svc "$INGRESS_SVC" -n "$INGRESS_NS" --type='json' \
+                        -p="[{\"op\": \"replace\", \"path\": \"/spec/ports/0/nodePort\", \"value\": $INGRESS_PORT}]" 2>/dev/null || true
+                fi
+            elif [ "$INGRESS_TYPE" = "nginx" ]; then
+                kubectl patch svc "$INGRESS_SVC" -n "$INGRESS_NS" --type='json' \
+                    -p="[{\"op\": \"replace\", \"path\": \"/spec/ports/0/port\", \"value\": $INGRESS_PORT}]" 2>/dev/null || true
+            fi
+            
+            echo -e "${GREEN}✓ Ingress port configured to $INGRESS_PORT${NC}"
+        fi
+    else
+        INGRESS_PORT="$CURRENT_PORT"
+    fi
+}
+
 # Configure storage paths
 configure_storage() {
     # Default paths
@@ -393,8 +475,12 @@ show_access_info() {
         echo -e "  ${BLUE}http://$NODE_IP:$NODE_PORT${NC}"
     else
         # Ingress access
+        local url="http://$INGRESS_HOST"
+        if [ -n "$INGRESS_PORT" ] && [ "$INGRESS_PORT" != "80" ]; then
+            url="http://$INGRESS_HOST:$INGRESS_PORT"
+        fi
         echo -e "${YELLOW}Access the UI:${NC}"
-        echo -e "  ${BLUE}http://$INGRESS_HOST${NC}"
+        echo -e "  ${BLUE}$url${NC}"
         echo ""
         
         # Check if hostname resolves
@@ -427,6 +513,7 @@ main() {
     show_banner
     check_prereqs
     setup_namespace
+    configure_ingress_port
     configure_storage
     deploy_helm
     show_access_info
