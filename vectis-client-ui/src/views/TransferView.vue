@@ -8,10 +8,12 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  Plug
+  Plug,
+  FolderOpen
 } from 'lucide-vue-next'
 import api from '@/api'
 import PathPlaceholderInput from '@/components/PathPlaceholderInput.vue'
+import FileBrowser from '@/components/FileBrowser.vue'
 
 interface StorageConnection {
   id: string
@@ -36,6 +38,17 @@ const form = ref({
   filename: '',
   remoteFilename: ''
 })
+
+// File browser state
+const showFileBrowser = ref(false)
+const fileBrowserMode = ref<'file' | 'directory'>('file')
+const fileBrowserConnectionId = ref('')
+
+function openFileBrowser(mode: 'file' | 'directory', connectionId: string) {
+  fileBrowserMode.value = mode
+  fileBrowserConnectionId.value = connectionId
+  showFileBrowser.value = true
+}
 
 const activeConnectionLabel = computed(() => 
   form.value.direction === 'SEND' ? 'Source Storage' : 'Destination Storage'
@@ -242,26 +255,49 @@ function formatBytes(bytes: number) {
           <div>
             <template v-if="form.direction === 'SEND'">
               <label class="block text-sm font-medium text-gray-700 mb-1">Filename *</label>
-              <input 
-                v-model="form.filename" 
-                type="text" 
-                class="input" 
-                required 
-                :placeholder="form.sourceConnectionId ? 'path/to/file.txt' : '/full/path/to/file.txt'"
-              />
+              <div class="flex gap-2">
+                <input 
+                  v-model="form.filename" 
+                  type="text" 
+                  class="input flex-1" 
+                  required 
+                  :placeholder="form.sourceConnectionId ? 'path/to/file.txt' : '/path/to/file.txt'"
+                />
+                <button 
+                  type="button"
+                  @click="openFileBrowser('file', form.sourceConnectionId)"
+                  class="btn btn-secondary flex items-center gap-1"
+                  title="Browse files"
+                >
+                  <FolderOpen class="h-4 w-4" />
+                </button>
+              </div>
               <p class="text-xs text-gray-500 mt-1">
-                {{ form.sourceConnectionId ? 'Relative path on the storage connection' : 'Full local path to the file' }}
+                {{ form.sourceConnectionId ? 'Select file from storage connection' : 'Select file from local filesystem' }}
               </p>
             </template>
             <template v-else>
-              <PathPlaceholderInput
-                v-model="form.filename"
-                label="Filename *"
-                :placeholder="form.destinationConnectionId ? 'received/${file}' : '/data/received/${partner}/${file}'"
-                direction="RECEIVE"
-              />
+              <label class="block text-sm font-medium text-gray-700 mb-1">Destination *</label>
+              <div class="flex gap-2">
+                <div class="flex-1">
+                  <PathPlaceholderInput
+                    v-model="form.filename"
+                    label=""
+                    :placeholder="form.destinationConnectionId ? 'output/${file}' : '/data/received/${file}'"
+                    direction="RECEIVE"
+                  />
+                </div>
+                <button 
+                  type="button"
+                  @click="openFileBrowser('directory', form.destinationConnectionId)"
+                  class="btn btn-secondary flex items-center gap-1 self-start"
+                  title="Browse directories"
+                >
+                  <FolderOpen class="h-4 w-4" />
+                </button>
+              </div>
               <p class="text-xs text-gray-500 mt-1">
-                {{ form.destinationConnectionId ? 'Path on the storage connection' : 'Local path (supports placeholders)' }}
+                Select directory + filename pattern (use ${file}, ${date}, etc.)
               </p>
             </template>
           </div>
@@ -361,5 +397,14 @@ function formatBytes(bytes: number) {
         </div>
       </div>
     </div>
+
+    <!-- File Browser Modal -->
+    <FileBrowser
+      v-if="showFileBrowser"
+      :connection-id="fileBrowserConnectionId"
+      :mode="fileBrowserMode"
+      v-model="form.filename"
+      @close="showFileBrowser = false"
+    />
   </div>
 </template>
