@@ -15,7 +15,7 @@ Ce guide explique comment déployer PeSIT Wizard dans différents environnements
 
 ```bash
 # Ajouter le repo Helm PeSIT Wizard
-helm repo add pesitwizard https://charts.pesitwizard.cloud
+helm repo add pesitwizard https://charts.pesitwizard.com
 helm repo update
 
 # Installer PeSIT Wizard Server

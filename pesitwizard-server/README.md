@@ -93,4 +93,4 @@ docker run -p 5000:5000 -p 8080:8080 pesitwizard-server
 
 ## Enterprise
 
-Pour le clustering haute disponibilité et la console d'administration, voir [PeSIT Wizard Enterprise](https://pesitwizard.cloud).
+Pour le clustering haute disponibilité et la console d'administration, voir [PeSIT Wizard Enterprise](https://pesitwizard.com).

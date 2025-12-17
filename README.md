@@ -133,9 +133,9 @@ helm install pesitwizard-server ./pesitwizard-helm-charts/pesitwizard-server -n 
 
 ## Documentation
 
-- [Guide de démarrage](https://docs.pesitwizard.cloud/guide/quickstart)
-- [Configuration serveur](https://docs.pesitwizard.cloud/guide/server/configuration)
-- [API REST](https://docs.pesitwizard.cloud/api/)
+- [Guide de démarrage](https://docs.pesitwizard.com/guide/quickstart)
+- [Configuration serveur](https://docs.pesitwizard.com/guide/server/configuration)
+- [API REST](https://docs.pesitwizard.com/api/)
 
 ## Structure du projet
 
@@ -155,7 +155,7 @@ Les contributions sont les bienvenues ! Voir [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Enterprise
 
-Pour les fonctionnalités entreprise (clustering HA, console d'administration, support), voir [PeSIT Wizard Enterprise](https://pesitwizard.cloud).
+Pour les fonctionnalités entreprise (clustering HA, console d'administration, support), voir [PeSIT Wizard Enterprise](https://pesitwizard.com).
 
 ## Licence
 
