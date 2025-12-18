@@ -44,13 +44,13 @@ public class BusinessCalendar {
     @Builder.Default
     private String timezone = "Europe/Paris";
 
-    @ElementCollection
+    @ElementCollection(fetch = jakarta.persistence.FetchType.EAGER)
     @CollectionTable(name = "calendar_working_days", joinColumns = @JoinColumn(name = "calendar_id"))
     @Column(name = "day_of_week")
     @Builder.Default
     private Set<Integer> workingDays = new HashSet<>(Set.of(1, 2, 3, 4, 5));
 
-    @ElementCollection
+    @ElementCollection(fetch = jakarta.persistence.FetchType.EAGER)
     @CollectionTable(name = "calendar_holidays", joinColumns = @JoinColumn(name = "calendar_id"))
     @Column(name = "holiday_date")
     @Builder.Default
