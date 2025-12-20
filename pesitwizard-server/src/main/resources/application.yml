@@ -1,12 +1,19 @@
-# Vectis Server Configuration
-# Profile: Hors-SIT over TCP/IP
+# PeSIT Wizard Server Configuration
+# Profile: PeSIT Hors-SIT over TCP/IP
 #
 # Database profiles:
 #   - default (H2): For local development
 #   - postgres: For production with PostgreSQL (multi-tenant)
 #
 # Run with: --spring.profiles.active=postgres
-# Set VECTIS_CLUSTER_ID for multi-tenant mode
+# Set PESIT_CLUSTER_ID for multi-tenant mode
+
+# Version info (injected at build time)
+pesitwizard:
+  version: "@project.version@"
+  build:
+    timestamp: "@maven.build.timestamp@"
+    commit: "${GIT_COMMIT:dev}"
 
 spring:
   application:
