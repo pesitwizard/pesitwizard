@@ -96,25 +96,33 @@ public class PodLabelService implements ClusterEventListener {
         }
 
         try {
-            // Use JSON patch to update the label
-            String patchJson;
             if (isLeader) {
-                patchJson = "[{\"op\": \"add\", \"path\": \"/metadata/labels/pesitwizard-leader\", \"value\": \"true\"}]";
-            } else {
-                patchJson = "[{\"op\": \"remove\", \"path\": \"/metadata/labels/pesitwizard-leader\"}]";
-            }
-
-            kubernetesClient.pods()
-                    .inNamespace(namespace)
-                    .withName(podName)
-                    .patch(PatchContext.of(PatchType.JSON), patchJson);
-
-            if (isLeader) {
+                // Add or update the leader label
+                String patchJson = "[{\"op\": \"add\", \"path\": \"/metadata/labels/pesitwizard-leader\", \"value\": \"true\"}]";
+                kubernetesClient.pods()
+                        .inNamespace(namespace)
+                        .withName(podName)
+                        .patch(PatchContext.of(PatchType.JSON), patchJson);
                 log.info("Added leader label to pod {}", podName);
             } else {
-                log.info("Removed leader label from pod {}", podName);
+                // Remove the leader label - use strategic merge patch to avoid error if label
+                // doesn't exist
+                var pod = kubernetesClient.pods()
+                        .inNamespace(namespace)
+                        .withName(podName)
+                        .get();
+                if (pod != null && pod.getMetadata().getLabels() != null
+                        && pod.getMetadata().getLabels().containsKey("pesitwizard-leader")) {
+                    String patchJson = "[{\"op\": \"remove\", \"path\": \"/metadata/labels/pesitwizard-leader\"}]";
+                    kubernetesClient.pods()
+                            .inNamespace(namespace)
+                            .withName(podName)
+                            .patch(PatchContext.of(PatchType.JSON), patchJson);
+                    log.info("Removed leader label from pod {}", podName);
+                } else {
+                    log.debug("Leader label not present on pod {}, nothing to remove", podName);
+                }
             }
-
         } catch (Exception e) {
             log.error("Failed to update leader label on pod {}: {}", podName, e.getMessage());
         }
