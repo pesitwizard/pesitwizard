@@ -10,8 +10,9 @@ WORKDIR /app
 # Copy the pre-built JAR (exec classifier for Spring Boot fat JAR)
 COPY target/pesitwizard-server-*-exec.jar app.jar
 
-# Create directories for data
-RUN mkdir -p /data/db /data/received /data/send /app/config/jgroups && \
+# Create directories for data (both /data and /app paths for flexibility)
+RUN mkdir -p /data/db /data/received /data/send \
+             /app/received /app/send /app/config/jgroups && \
     chown -R pesit:pesit /data /app
 
 # Switch to non-root user
