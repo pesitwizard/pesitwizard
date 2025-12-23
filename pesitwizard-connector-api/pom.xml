@@ -9,8 +9,8 @@
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>Vectis Connector API</name>
-    <description>SDK for creating pluggable storage connectors for Vectis</description>
+    <name>PeSIT Wizard Connector API</name>
+    <description>SDK for creating pluggable storage connectors for PeSIT Wizard</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

@@ -9,8 +9,8 @@
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>Vectis SFTP Connector</name>
-    <description>SFTP storage connector for Vectis</description>
+    <name>PeSIT Wizard SFTP Connector</name>
+    <description>SFTP storage connector for PeSIT Wizard</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -19,7 +19,7 @@
     </properties>
 
     <dependencies>
-        <!-- Vectis Connector API -->
+        <!-- PeSIT Wizard Connector API -->
         <dependency>
             <groupId>com.pesitwizard</groupId>
             <artifactId>pesitwizard-connector-api</artifactId>

@@ -9,8 +9,8 @@
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>Vectis S3 Connector</name>
-    <description>AWS S3 / MinIO storage connector for Vectis</description>
+    <name>PeSIT Wizard S3 Connector</name>
+    <description>AWS S3 / MinIO storage connector for PeSIT Wizard</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

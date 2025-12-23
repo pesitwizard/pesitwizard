@@ -10,8 +10,8 @@
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>Vectis Client</name>
-    <description>Vectis file transfer client application</description>
+    <name>PeSIT Wizard Client</name>
+    <description>PeSIT Wizard file transfer client application</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -36,21 +36,21 @@
     </dependencyManagement>
 
     <dependencies>
-        <!-- Vectis Protocol Library -->
+        <!-- PeSIT Wizard Protocol Library -->
         <dependency>
             <groupId>com.pesitwizard</groupId>
             <artifactId>pesitwizard-pesit</artifactId>
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
-        <!-- Vectis Connector API (SDK for storage connectors) -->
+        <!-- PeSIT Wizard Connector API (SDK for storage connectors) -->
         <dependency>
             <groupId>com.pesitwizard</groupId>
             <artifactId>pesitwizard-connector-api</artifactId>
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
-        <!-- Vectis Local Filesystem Connector (built-in) -->
+        <!-- PeSIT Wizard Local Filesystem Connector (built-in) -->
         <dependency>
             <groupId>com.pesitwizard.connector</groupId>
             <artifactId>pesitwizard-connector-local</artifactId>
