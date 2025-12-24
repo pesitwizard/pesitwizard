@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,28 +30,35 @@ import lombok.extern.slf4j.Slf4j;
 @RequestMapping("/api/v1/filesystem")
 public class FileSystemController {
 
-    private static final String DEFAULT_BASE_PATH = "/data";
+    private final String basePath;
+
+    public FileSystemController(
+            @Value("${pesit.server.filesystem.base-path:${java.io.tmpdir}/pesitwizard}") String basePath) {
+        this.basePath = basePath;
+    }
 
     /**
      * List files and directories at the given path.
-     * For security, only paths under /data are allowed.
+     * For security, only paths under the configured base path are allowed.
      */
     @GetMapping("/browse")
     public ResponseEntity<?> browse(
-            @RequestParam(defaultValue = "/data") String path) {
+            @RequestParam(required = false) String path) {
+        // Use base path as default if no path specified
+        String effectivePath = (path == null || path.isEmpty()) ? basePath : path;
         try {
-            Path targetPath = Paths.get(path).normalize();
+            Path targetPath = Paths.get(effectivePath).normalize();
 
-            // Security: only allow browsing under /data
-            if (!targetPath.startsWith(DEFAULT_BASE_PATH)) {
-                log.warn("Attempted to browse outside allowed path: {}", path);
+            // Security: only allow browsing under configured base path
+            if (!targetPath.startsWith(basePath)) {
+                log.warn("Attempted to browse outside allowed path: {}", effectivePath);
                 return ResponseEntity.badRequest()
-                        .body(new ErrorResponse("Access denied: path must be under " + DEFAULT_BASE_PATH));
+                        .body(new ErrorResponse("Access denied: path must be under " + basePath));
             }
 
             if (!Files.exists(targetPath)) {
-                // If path doesn't exist, try to create it (for /data subdirectories)
-                if (targetPath.startsWith(DEFAULT_BASE_PATH)) {
+                // If path doesn't exist, try to create it (for subdirectories under base path)
+                if (targetPath.startsWith(basePath)) {
                     try {
                         Files.createDirectories(targetPath);
                         log.info("Created directory: {}", targetPath);
@@ -72,7 +80,7 @@ public class FileSystemController {
             List<FileEntry> entries = new ArrayList<>();
 
             // Add parent directory entry if not at root
-            if (!targetPath.equals(Paths.get(DEFAULT_BASE_PATH))) {
+            if (!targetPath.equals(Paths.get(basePath))) {
                 entries.add(FileEntry.builder()
                         .name("..")
                         .path(targetPath.getParent().toString())
@@ -108,7 +116,7 @@ public class FileSystemController {
 
             return ResponseEntity.ok(BrowseResponse.builder()
                     .currentPath(targetPath.toString())
-                    .basePath(DEFAULT_BASE_PATH)
+                    .basePath(basePath)
                     .entries(entries)
                     .build());
 
@@ -127,10 +135,10 @@ public class FileSystemController {
         try {
             Path targetPath = Paths.get(path).normalize();
 
-            // Security: only allow creating under /data
-            if (!targetPath.startsWith(DEFAULT_BASE_PATH)) {
+            // Security: only allow creating under configured base path
+            if (!targetPath.startsWith(basePath)) {
                 return ResponseEntity.badRequest()
-                        .body(new ErrorResponse("Access denied: path must be under " + DEFAULT_BASE_PATH));
+                        .body(new ErrorResponse("Access denied: path must be under " + basePath));
             }
 
             if (Files.exists(targetPath)) {
