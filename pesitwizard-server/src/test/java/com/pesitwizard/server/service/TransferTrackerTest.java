@@ -255,4 +255,83 @@ class TransferTrackerTest {
             verify(transferService).markInterruptedTransfers("node-1");
         }
     }
+
+    @Nested
+    @DisplayName("Edge Cases")
+    class EdgeCaseTests {
+
+        @Test
+        @DisplayName("should handle exception when sync point tracking fails")
+        void shouldHandleExceptionWhenSyncPointFails() {
+            sessionContext.setTransferRecordId("transfer-123");
+            doThrow(new RuntimeException("Database error")).when(transferService).recordSyncPoint(anyString(),
+                    anyLong());
+
+            assertDoesNotThrow(() -> transferTracker.trackSyncPoint(sessionContext, 1000L));
+        }
+
+        @Test
+        @DisplayName("should handle exception when completion fails")
+        void shouldHandleExceptionWhenCompletionFails() {
+            sessionContext.setTransferRecordId("transfer-123");
+            doThrow(new RuntimeException("Database error")).when(transferService).completeTransfer(anyString(), any());
+
+            assertDoesNotThrow(() -> transferTracker.trackTransferComplete(sessionContext));
+        }
+
+        @Test
+        @DisplayName("should handle exception when failure tracking fails")
+        void shouldHandleExceptionWhenFailureTrackingFails() {
+            sessionContext.setTransferRecordId("transfer-123");
+            doThrow(new RuntimeException("Database error")).when(transferService).failTransfer(anyString(), anyString(),
+                    anyString());
+
+            assertDoesNotThrow(() -> transferTracker.trackTransferFailed(sessionContext, "ERR001", "Error"));
+        }
+
+        @Test
+        @DisplayName("should handle exception when cancellation tracking fails")
+        void shouldHandleExceptionWhenCancellationFails() {
+            sessionContext.setTransferRecordId("transfer-123");
+            doThrow(new RuntimeException("Database error")).when(transferService).cancelTransfer(anyString(),
+                    anyString());
+
+            assertDoesNotThrow(() -> transferTracker.trackTransferCancelled(sessionContext, "User requested"));
+        }
+
+        @Test
+        @DisplayName("should handle exception when interruption tracking fails")
+        void shouldHandleExceptionWhenInterruptionFails() {
+            sessionContext.setTransferRecordId("transfer-123");
+            doThrow(new RuntimeException("Database error")).when(transferService).interruptTransfer(anyString(),
+                    anyString());
+
+            assertDoesNotThrow(() -> transferTracker.trackTransferInterrupted(sessionContext, "Connection lost"));
+        }
+
+        @Test
+        @DisplayName("should track completion with bytesTransferred but no data")
+        void shouldTrackCompletionWithBytesButNoData() {
+            sessionContext.setTransferRecordId("transfer-123");
+            TransferContext transferContext = new TransferContext();
+            transferContext.setBytesTransferred(1024);
+            sessionContext.setCurrentTransfer(transferContext);
+
+            transferTracker.trackTransferComplete(sessionContext);
+
+            verify(transferService).updateProgress("transfer-123", 1024L);
+            verify(transferService).completeTransfer(eq("transfer-123"), isNull());
+        }
+
+        @Test
+        @DisplayName("should track completion with null transfer context")
+        void shouldTrackCompletionWithNullTransferContext() {
+            sessionContext.setTransferRecordId("transfer-123");
+            sessionContext.setCurrentTransfer(null);
+
+            transferTracker.trackTransferComplete(sessionContext);
+
+            verify(transferService).completeTransfer(eq("transfer-123"), isNull());
+        }
+    }
 }
