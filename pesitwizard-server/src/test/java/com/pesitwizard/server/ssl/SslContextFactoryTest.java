@@ -250,6 +250,22 @@ class SslContextFactoryTest {
         assertTrue(info.isHasPrivateKey());
     }
 
+    @Test
+    @DisplayName("SslConfigurationException should store message")
+    void sslConfigurationExceptionShouldStoreMessage() {
+        SslConfigurationException ex = new SslConfigurationException("Test error");
+        assertEquals("Test error", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("SslConfigurationException should store cause")
+    void sslConfigurationExceptionShouldStoreCause() {
+        Exception cause = new RuntimeException("root cause");
+        SslConfigurationException ex = new SslConfigurationException("Test error", cause);
+        assertEquals("Test error", ex.getMessage());
+        assertEquals(cause, ex.getCause());
+    }
+
     private CertificateStore createStore(String name, StoreType type) {
         CertificateStore store = new CertificateStore();
         store.setName(name);
