@@ -61,6 +61,8 @@ public class KeycloakSecurityTest {
         @Nested
         @DisplayName("JWT Role Extraction Tests")
         class JwtRoleExtractionTests {
+                private static final org.slf4j.Logger log = org.slf4j.LoggerFactory
+                                .getLogger(JwtRoleExtractionTests.class);
 
                 private JwtRoleConverter roleConverter;
 
