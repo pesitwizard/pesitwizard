@@ -343,4 +343,73 @@ class TransferOperationHandlerTest {
 
         // Verify no exception - validation will fail but attributes should be extracted
     }
+
+    @Test
+    @DisplayName("handleCreate should extract file identification from PGI_09")
+    void handleCreateShouldExtractFileIdentification() throws Exception {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.CREATE);
+
+        // Add PGI_09 with PI_11 and PI_12
+        ParameterValue pgi09 = new ParameterValue(ParameterGroupIdentifier.PGI_09_ID_FICHIER,
+                new ParameterValue(ParameterIdentifier.PI_11_TYPE_FICHIER, new byte[] { 0x01 }),
+                new ParameterValue(ParameterIdentifier.PI_12_NOM_FICHIER, "TESTFILE".getBytes()));
+        fpdu.withParameter(pgi09);
+
+        when(fileValidator.validateForCreate(any(), any()))
+                .thenReturn(ValidationResult.error(com.pesitwizard.fpdu.DiagnosticCode.D2_205, "Test"));
+
+        handler.handleCreate(ctx, fpdu);
+    }
+
+    @Test
+    @DisplayName("handleSelect should extract file identification from PGI_09")
+    void handleSelectShouldExtractFileIdentification() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.SELECT);
+
+        ParameterValue pgi09 = new ParameterValue(ParameterGroupIdentifier.PGI_09_ID_FICHIER,
+                new ParameterValue(ParameterIdentifier.PI_11_TYPE_FICHIER, new byte[] { 0x02 }),
+                new ParameterValue(ParameterIdentifier.PI_12_NOM_FICHIER, "SELECTFILE".getBytes()));
+        fpdu.withParameter(pgi09);
+
+        when(fileValidator.validateForSelect(any(), any()))
+                .thenReturn(ValidationResult.error(com.pesitwizard.fpdu.DiagnosticCode.D2_205, "Test"));
+
+        handler.handleSelect(ctx, fpdu);
+    }
+
+    @Test
+    @DisplayName("handleCreate should extract transfer ID from PI_13")
+    void handleCreateShouldExtractTransferId() throws Exception {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.CREATE);
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_13_ID_TRANSFERT, 12345));
+
+        when(fileValidator.validateForCreate(any(), any()))
+                .thenReturn(ValidationResult.error(com.pesitwizard.fpdu.DiagnosticCode.D2_205, "Test"));
+
+        handler.handleCreate(ctx, fpdu);
+    }
+
+    @Test
+    @DisplayName("handleCreate should extract max entity size from PI_25")
+    void handleCreateShouldExtractMaxEntitySize() throws Exception {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+
+        Fpdu fpdu = new Fpdu(FpduType.CREATE);
+        fpdu.withParameter(new ParameterValue(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE, new byte[] { 0x00, 0x10 }));
+
+        when(fileValidator.validateForCreate(any(), any()))
+                .thenReturn(ValidationResult.error(com.pesitwizard.fpdu.DiagnosticCode.D2_205, "Test"));
+
+        handler.handleCreate(ctx, fpdu);
+    }
 }
