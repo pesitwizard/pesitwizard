@@ -274,6 +274,54 @@ class FileValidatorTest {
     }
 
     @Test
+    @DisplayName("validateForCreate should check partner access to file")
+    void validateForCreateShouldCheckPartnerAccess() {
+        SessionContext ctx = new SessionContext("test-session");
+        TransferContext transfer = new TransferContext();
+        transfer.setFilename("FILE1");
+
+        // Set up partner config that doesn't allow access to FILE1
+        PartnerConfig partnerConfig = new PartnerConfig();
+        partnerConfig.setId("PARTNER1");
+        partnerConfig.setAllowedFiles(new String[] { "OTHER_FILE" });
+        ctx.setPartnerConfig(partnerConfig);
+
+        VirtualFile vf = createVirtualFile("FILE1", true);
+        vf.setDirection(VirtualFile.Direction.RECEIVE);
+        when(configService.findVirtualFile("FILE1")).thenReturn(Optional.of(vf));
+
+        ValidationResult result = validator.validateForCreate(ctx, transfer);
+
+        assertFalse(result.isValid());
+        assertEquals(DiagnosticCode.D2_226, result.getDiagCode());
+        assertTrue(result.getMessage().contains("not authorized"));
+    }
+
+    @Test
+    @DisplayName("validateForSelect should check partner access to file")
+    void validateForSelectShouldCheckPartnerAccess() {
+        SessionContext ctx = new SessionContext("test-session");
+        TransferContext transfer = new TransferContext();
+        transfer.setFilename("FILE1");
+
+        // Set up partner config that doesn't allow access to FILE1
+        PartnerConfig partnerConfig = new PartnerConfig();
+        partnerConfig.setId("PARTNER1");
+        partnerConfig.setAllowedFiles(new String[] { "OTHER_FILE" });
+        ctx.setPartnerConfig(partnerConfig);
+
+        VirtualFile vf = createVirtualFile("FILE1", true);
+        vf.setDirection(VirtualFile.Direction.SEND);
+        when(configService.findVirtualFile("FILE1")).thenReturn(Optional.of(vf));
+
+        ValidationResult result = validator.validateForSelect(ctx, transfer);
+
+        assertFalse(result.isValid());
+        assertEquals(DiagnosticCode.D2_226, result.getDiagCode());
+        assertTrue(result.getMessage().contains("not authorized"));
+    }
+
+    @Test
     @DisplayName("validateForCreate should return error for disabled YAML config file")
     void validateForCreateShouldReturnErrorForDisabledYamlFile() {
         SessionContext ctx = new SessionContext("test-session");
