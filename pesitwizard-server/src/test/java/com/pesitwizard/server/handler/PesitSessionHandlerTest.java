@@ -84,4 +84,52 @@ class PesitSessionHandlerTest {
 
         assertNotEquals(ctx1.getSessionId(), ctx2.getSessionId());
     }
+
+    @Test
+    @DisplayName("session should start in CN01_REPOS state")
+    void sessionShouldStartInReposState() {
+        SessionContext ctx = handler.createSession("192.168.1.100");
+
+        assertEquals(ServerState.CN01_REPOS, ctx.getState());
+    }
+
+    @Test
+    @DisplayName("session should transition through states correctly")
+    void sessionShouldTransitionThroughStates() {
+        SessionContext ctx = handler.createSession("192.168.1.100");
+
+        assertEquals(ServerState.CN01_REPOS, ctx.getState());
+
+        ctx.transitionTo(ServerState.CN03_CONNECTED);
+        assertEquals(ServerState.CN03_CONNECTED, ctx.getState());
+
+        ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
+        assertEquals(ServerState.SF03_FILE_SELECTED, ctx.getState());
+
+        ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
+        assertEquals(ServerState.OF02_TRANSFER_READY, ctx.getState());
+    }
+
+    @Test
+    @DisplayName("session should handle abort flag")
+    void sessionShouldHandleAbortFlag() {
+        SessionContext ctx = handler.createSession("192.168.1.100");
+
+        assertFalse(ctx.isAborted());
+
+        ctx.setAborted(true);
+        assertTrue(ctx.isAborted());
+    }
+
+    @Test
+    @DisplayName("session should track touch time")
+    void sessionShouldTrackTouchTime() throws InterruptedException {
+        SessionContext ctx = handler.createSession("192.168.1.100");
+        java.time.Instant initialTime = ctx.getLastActivityTime();
+
+        Thread.sleep(10);
+        ctx.touch();
+
+        assertTrue(ctx.getLastActivityTime().isAfter(initialTime));
+    }
 }
