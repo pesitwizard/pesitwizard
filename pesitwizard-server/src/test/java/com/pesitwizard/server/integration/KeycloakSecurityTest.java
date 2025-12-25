@@ -152,6 +152,8 @@ public class KeycloakSecurityTest {
         @Nested
         @DisplayName("API Key Authentication Tests")
         class ApiKeyAuthenticationTests {
+                private static final org.slf4j.Logger log = org.slf4j.LoggerFactory
+                                .getLogger(ApiKeyAuthenticationTests.class);
 
                 @Test
                 @DisplayName("Should authenticate with valid API key")

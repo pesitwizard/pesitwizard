@@ -407,4 +407,49 @@ class DataTransferHandlerTest {
             java.nio.file.Files.deleteIfExists(tempFile);
         }
     }
+
+    @Test
+    @DisplayName("handleTDE07 should write data to file and track completion")
+    void handleTDE07ShouldWriteDataAndTrackCompletion() throws Exception {
+        java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("test");
+        java.nio.file.Path tempFile = tempDir.resolve("output.dat");
+
+        try {
+            SessionContext ctx = new SessionContext("test-session");
+            ctx.transitionTo(ServerState.TDE07_WRITE_END);
+            TransferContext transfer = ctx.startTransfer();
+            transfer.setLocalPath(tempFile);
+            transfer.setBytesTransferred(100);
+            transfer.setRecordsTransferred(5);
+            transfer.appendData("Test data".getBytes());
+
+            Fpdu fpdu = new Fpdu(FpduType.TRANS_END);
+
+            Fpdu response = handler.handleTDE07(ctx, fpdu);
+
+            assertNotNull(response);
+            assertEquals(FpduType.ACK_TRANS_END, response.getFpduType());
+            assertEquals(ServerState.OF02_TRANSFER_READY, ctx.getState());
+            verify(transferTracker).trackTransferComplete(ctx);
+        } finally {
+            java.nio.file.Files.deleteIfExists(tempFile);
+            java.nio.file.Files.deleteIfExists(tempDir);
+        }
+    }
+
+    @Test
+    @DisplayName("handleTDE07 should return ABORT for unexpected FPDU type")
+    void handleTDE07ShouldReturnAbortForUnexpectedFpdu() throws Exception {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.transitionTo(ServerState.TDE07_WRITE_END);
+        ctx.startTransfer();
+
+        Fpdu fpdu = new Fpdu(FpduType.DTF); // Wrong type
+
+        Fpdu response = handler.handleTDE07(ctx, fpdu);
+
+        assertNotNull(response);
+        assertEquals(FpduType.ABORT, response.getFpduType());
+    }
+
 }
