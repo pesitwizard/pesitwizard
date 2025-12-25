@@ -385,6 +385,65 @@ class ConnectionValidatorTest {
         assertTrue(result.isValid());
     }
 
+    @Test
+    @DisplayName("validateProtocolVersion should return ok when client version equals server version")
+    void validateProtocolVersionShouldReturnOkWhenEqualVersion() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.setProtocolVersion(2);
+        when(properties.getProtocolVersion()).thenReturn(2);
+
+        ValidationResult result = validator.validateProtocolVersion(ctx);
+
+        assertTrue(result.isValid());
+    }
+
+    @Test
+    @DisplayName("validateServerName should return ok when server name matches case-insensitively")
+    void validateServerNameShouldMatchCaseInsensitive() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.setServerIdentifier("test_server");
+        ctx.setOurServerId("TEST_SERVER");
+
+        ValidationResult result = validator.validateServerName(ctx);
+
+        assertTrue(result.isValid());
+    }
+
+    @Test
+    @DisplayName("validateServerName should use properties serverId when ourServerId is null")
+    void validateServerNameShouldUsePropertiesServerId() {
+        SessionContext ctx = new SessionContext("test-session");
+        ctx.setServerIdentifier("TEST_SERVER");
+        ctx.setOurServerId(null);
+        when(properties.getServerId()).thenReturn("TEST_SERVER");
+
+        ValidationResult result = validator.validateServerName(ctx);
+
+        assertTrue(result.isValid());
+    }
+
+    @Test
+    @DisplayName("convertToPartnerConfig should set maxConnections")
+    void convertToPartnerConfigShouldSetMaxConnections() {
+        Partner partner = createPartner("PARTNER1", true);
+        partner.setMaxConnections(10);
+
+        PartnerConfig config = validator.convertToPartnerConfig(partner);
+
+        assertEquals(10, config.getMaxConnections());
+    }
+
+    @Test
+    @DisplayName("convertToPartnerConfig should set description")
+    void convertToPartnerConfigShouldSetDescription() {
+        Partner partner = createPartner("PARTNER1", true);
+        partner.setDescription("Test Partner");
+
+        PartnerConfig config = validator.convertToPartnerConfig(partner);
+
+        assertEquals("Test Partner", config.getDescription());
+    }
+
     private Partner createPartner(String id, boolean enabled) {
         Partner partner = new Partner();
         partner.setId(id);
