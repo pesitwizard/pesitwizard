@@ -161,7 +161,8 @@ public class TransferOperationHandler {
     public Fpdu handleOpen(SessionContext ctx, Fpdu fpdu) {
         // Extract PI 21 (Compression)
         ParameterValue pi21 = fpdu.getParameter(ParameterIdentifier.PI_21_COMPRESSION);
-        if (pi21 != null && ctx.getCurrentTransfer() != null) {
+        if (pi21 != null && pi21.getValue() != null && pi21.getValue().length > 0
+                && ctx.getCurrentTransfer() != null) {
             ctx.getCurrentTransfer().setCompression(pi21.getValue()[0] & 0xFF);
         }
 
@@ -247,17 +248,17 @@ public class TransferOperationHandler {
         if (pgi30 != null) {
             // PI 31 - Record Format
             ParameterValue pi31 = pgi30.getParameter(ParameterIdentifier.PI_31_FORMAT_ARTICLE);
-            if (pi31 != null) {
+            if (pi31 != null && pi31.getValue() != null && pi31.getValue().length > 0) {
                 transfer.setRecordFormat(pi31.getValue()[0] & 0xFF);
             }
             // PI 32 - Record Length
             ParameterValue pi32 = pgi30.getParameter(ParameterIdentifier.PI_32_LONG_ARTICLE);
-            if (pi32 != null) {
+            if (pi32 != null && pi32.getValue() != null) {
                 transfer.setRecordLength(parseNumeric(pi32.getValue()));
             }
             // PI 33 - File Organization
             ParameterValue pi33 = pgi30.getParameter(ParameterIdentifier.PI_33_ORG_FICHIER);
-            if (pi33 != null) {
+            if (pi33 != null && pi33.getValue() != null && pi33.getValue().length > 0) {
                 transfer.setFileOrganization(pi33.getValue()[0] & 0xFF);
             }
         }

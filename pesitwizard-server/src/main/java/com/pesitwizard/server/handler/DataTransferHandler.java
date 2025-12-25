@@ -179,7 +179,8 @@ public class DataTransferHandler {
             recordCount = transfer.getRecordsTransferred();
 
             // Write received data to file
-            if (transfer.getLocalPath() != null && transfer.getData().length > 0) {
+            byte[] data = transfer.getData();
+            if (transfer.getLocalPath() != null && data != null && data.length > 0) {
                 writeReceivedData(ctx, transfer);
             }
         }
