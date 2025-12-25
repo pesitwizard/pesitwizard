@@ -291,5 +291,87 @@ class FpduResponseBuilderTest {
 
             assertEquals(FpduType.ABORT, response.getFpduType());
         }
+
+        @Test
+        @DisplayName("should build ABORT with empty message")
+        void shouldBuildAbortWithEmptyMessage() {
+            Fpdu response = FpduResponseBuilder.buildAbort(sessionContext,
+                    DiagnosticCode.D1_100, "");
+
+            assertEquals(FpduType.ABORT, response.getFpduType());
+        }
+    }
+
+    @Nested
+    @DisplayName("Edge Cases")
+    class EdgeCaseTests {
+
+        @Test
+        @DisplayName("should build RCONNECT with empty message")
+        void shouldBuildRconnectWithEmptyMessage() {
+            Fpdu response = FpduResponseBuilder.buildRconnect(sessionContext,
+                    DiagnosticCode.D3_301, "");
+
+            assertEquals(FpduType.RCONNECT, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build NACK_CREATE with empty message")
+        void shouldBuildNackCreateWithEmptyMessage() {
+            Fpdu response = FpduResponseBuilder.buildNackCreate(sessionContext,
+                    DiagnosticCode.D2_205, "");
+
+            assertEquals(FpduType.ACK_CREATE, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build NACK_SELECT with empty message")
+        void shouldBuildNackSelectWithEmptyMessage() {
+            Fpdu response = FpduResponseBuilder.buildNackSelect(sessionContext,
+                    DiagnosticCode.D2_205, "");
+
+            assertEquals(FpduType.ACK_SELECT, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build NACK_SELECT with null message")
+        void shouldBuildNackSelectWithNullMessage() {
+            Fpdu response = FpduResponseBuilder.buildNackSelect(sessionContext,
+                    DiagnosticCode.D2_205, null);
+
+            assertEquals(FpduType.ACK_SELECT, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build ACK_MSG with empty message")
+        void shouldBuildAckMsgWithEmptyMessage() {
+            Fpdu response = FpduResponseBuilder.buildAckMsg(sessionContext, "");
+
+            assertEquals(FpduType.ACK_MSG, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build ACK_SELECT with null transfer context")
+        void shouldBuildAckSelectWithNullTransfer() {
+            sessionContext.setCurrentTransfer(null);
+
+            Fpdu response = FpduResponseBuilder.buildAckSelect(sessionContext, 4096);
+
+            assertEquals(FpduType.ACK_SELECT, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build ACK_SELECT with transfer but null local path")
+        void shouldBuildAckSelectWithNullLocalPath() {
+            TransferContext transfer = new TransferContext();
+            transfer.setFilename("test.dat");
+            transfer.setTransferId(1);
+            transfer.setLocalPath(null);
+            sessionContext.setCurrentTransfer(transfer);
+
+            Fpdu response = FpduResponseBuilder.buildAckSelect(sessionContext, 4096);
+
+            assertEquals(FpduType.ACK_SELECT, response.getFpduType());
+        }
     }
 }
