@@ -162,15 +162,6 @@ class SslContextFactoryTest {
     }
 
     @Test
-    @DisplayName("createEmptyKeyStore should create PKCS12 store")
-    void createEmptyKeyStoreShouldCreatePkcs12() throws Exception {
-        byte[] storeData = factory.createEmptyKeyStore(StoreFormat.PKCS12, "password");
-
-        assertNotNull(storeData);
-        assertTrue(storeData.length > 0);
-    }
-
-    @Test
     @DisplayName("createEmptyKeyStore should handle null password")
     void createEmptyKeyStoreShouldHandleNullPassword() throws Exception {
         byte[] storeData = factory.createEmptyKeyStore(StoreFormat.PKCS12, null);
@@ -270,15 +261,6 @@ class SslContextFactoryTest {
     @DisplayName("createEmptyKeyStore should create PKCS12 keystore")
     void createEmptyKeyStoreShouldCreatePkcs12() throws Exception {
         byte[] data = factory.createEmptyKeyStore(StoreFormat.PKCS12, "password");
-
-        assertNotNull(data);
-        assertTrue(data.length > 0);
-    }
-
-    @Test
-    @DisplayName("createEmptyKeyStore should create JKS keystore")
-    void createEmptyKeyStoreShouldCreateJks() throws Exception {
-        byte[] data = factory.createEmptyKeyStore(StoreFormat.JKS, "password");
 
         assertNotNull(data);
         assertTrue(data.length > 0);

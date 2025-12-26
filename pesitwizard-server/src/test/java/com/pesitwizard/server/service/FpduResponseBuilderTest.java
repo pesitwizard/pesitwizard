@@ -405,5 +405,46 @@ class FpduResponseBuilderTest {
 
             assertEquals(FpduType.RELCONF, response.getFpduType());
         }
+
+        @Test
+        @DisplayName("should build ACK_CLOSE")
+        void shouldBuildAckClose() {
+            Fpdu response = FpduResponseBuilder.buildAckClose(sessionContext);
+
+            assertEquals(FpduType.ACK_CLOSE, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build ACK_DESELECT")
+        void shouldBuildAckDeselect() {
+            Fpdu response = FpduResponseBuilder.buildAckDeselect(sessionContext);
+
+            assertEquals(FpduType.ACK_DESELECT, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build ACK_TRANS_END without counts when zero")
+        void shouldBuildAckTransEndWithoutCounts() {
+            Fpdu response = FpduResponseBuilder.buildAckTransEnd(sessionContext, 0, 0);
+
+            assertEquals(FpduType.ACK_TRANS_END, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build DTF response")
+        void shouldBuildDtf() {
+            byte[] data = "test data".getBytes();
+            Fpdu response = FpduResponseBuilder.buildDtf(sessionContext, data);
+
+            assertEquals(FpduType.DTF, response.getFpduType());
+        }
+
+        @Test
+        @DisplayName("should build DTF_END response")
+        void shouldBuildDtfEnd() {
+            Fpdu response = FpduResponseBuilder.buildDtfEnd(sessionContext);
+
+            assertEquals(FpduType.DTF_END, response.getFpduType());
+        }
     }
 }
