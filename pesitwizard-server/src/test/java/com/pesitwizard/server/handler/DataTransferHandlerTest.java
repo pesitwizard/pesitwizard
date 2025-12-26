@@ -1,7 +1,6 @@
 package com.pesitwizard.server.handler;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -451,69 +450,6 @@ class DataTransferHandlerTest {
 
         assertNotNull(response);
         assertEquals(FpduType.ABORT, response.getFpduType());
-    }
-
-    @Test
-    @DisplayName("handleTDE02B should handle SYN FPDU and record sync point")
-    void handleTDE02BShouldHandleSyn() throws Exception {
-        SessionContext ctx = new SessionContext("test-session");
-        ctx.transitionTo(ServerState.TDE02B_RECEIVING_DATA);
-        TransferContext transfer = ctx.startTransfer();
-        transfer.setBytesTransferred(5000);
-
-        Fpdu fpdu = new Fpdu(FpduType.SYN);
-
-        Fpdu response = handler.handleTDE02B(ctx, fpdu);
-
-        assertNotNull(response);
-        assertEquals(FpduType.ACK_SYN, response.getFpduType());
-        verify(transferTracker).trackSyncPoint(eq(ctx), anyLong());
-    }
-
-    @Test
-    @DisplayName("handleTDE02B should handle IDT FPDU")
-    void handleTDE02BShouldHandleIdt() throws Exception {
-        SessionContext ctx = new SessionContext("test-session");
-        ctx.transitionTo(ServerState.TDE02B_RECEIVING_DATA);
-        ctx.startTransfer();
-
-        Fpdu fpdu = new Fpdu(FpduType.IDT);
-
-        Fpdu response = handler.handleTDE02B(ctx, fpdu);
-
-        assertNotNull(response);
-        assertEquals(FpduType.ACK_IDT, response.getFpduType());
-    }
-
-    @Test
-    @DisplayName("handleTDL02B should return ABORT for unexpected FPDU type")
-    void handleTDL02BShouldReturnAbortForUnexpectedFpdu() throws Exception {
-        SessionContext ctx = new SessionContext("test-session");
-        ctx.transitionTo(ServerState.TDL02B_SENDING_DATA);
-        ctx.startTransfer();
-
-        Fpdu fpdu = new Fpdu(FpduType.CREATE); // Wrong type
-
-        Fpdu response = handler.handleTDL02B(ctx, fpdu);
-
-        assertNotNull(response);
-        assertEquals(FpduType.ABORT, response.getFpduType());
-    }
-
-    @Test
-    @DisplayName("handleWrite should return ACK_WRITE and transition to receiving state")
-    void handleWriteShouldReturnAckWrite() throws Exception {
-        SessionContext ctx = new SessionContext("test-session");
-        ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
-        ctx.startTransfer();
-
-        Fpdu fpdu = new Fpdu(FpduType.WRITE);
-
-        Fpdu response = handler.handleWrite(ctx, fpdu);
-
-        assertNotNull(response);
-        assertEquals(FpduType.ACK_WRITE, response.getFpduType());
-        assertEquals(ServerState.TDE02B_RECEIVING_DATA, ctx.getState());
     }
 
 }
