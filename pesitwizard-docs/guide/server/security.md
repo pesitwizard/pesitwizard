@@ -61,95 +61,108 @@ PeSIT Wizard intègre une **Autorité de Certification (CA) privée** pour simpl
      └─────────────┘   └─────────────┘   └─────────────┘
 ```
 
-## Gestion des certificats via l'interface utilisateur
+## Gestion de la CA privée (Administration)
 
-L'interface PeSIT Wizard Client permet de gérer l'ensemble de l'infrastructure de certificats de manière visuelle.
+::: warning Sécurité
+La CA privée est un composant critique de sécurité. Son accès doit être **strictement limité aux administrateurs de sécurité**. En production, envisagez d'utiliser un HSM (Hardware Security Module) pour protéger les clés CA.
+:::
 
-### Accéder à la gestion des certificats
+### Principe de séparation des responsabilités
 
-Dans le menu latéral, cliquez sur **Certificates** pour accéder à l'interface de gestion :
+```
+┌─────────────────────────────────────────────────────────────────┐
+│              CA Privée (Administration sécurité)                │
+│  - Accès restreint aux administrateurs sécurité                │
+│  - Initialisation unique de la CA                               │
+│  - Signature des certificats serveur et client                 │
+│  - Stockage sécurisé des clés (HSM recommandé en prod)         │
+└─────────────────────────────────────────────────────────────────┘
+                              │ distribue certificats
+           ┌──────────────────┼──────────────────┐
+           ▼                                      ▼
+┌─────────────────────┐              ┌─────────────────────┐
+│  Serveur PeSIT      │              │  Client PeSIT       │
+│  - Reçoit keystore  │              │  - Reçoit keystore  │
+│    signé par CA     │              │    signé par CA     │
+│  - Truststore CA    │              │  - Truststore CA    │
+└─────────────────────┘              └─────────────────────┘
+```
 
-![Navigation vers Certificates](/screenshots/certificates-nav.png)
+### Initialisation de la CA (une seule fois)
 
-### 1. Initialiser la CA privée
-
-Lors du premier accès, la CA n'est pas initialisée. Cliquez sur le bouton **Initialize CA** :
-
-![Initialisation de la CA](/screenshots/ca-init.png)
-
-Une fois initialisée, vous verrez le statut de la CA avec son DN (Distinguished Name) :
-
-![CA initialisée](/screenshots/ca-initialized.png)
-
-### 2. Générer un certificat pour un partenaire
-
-Cliquez sur **Generate Partner Cert** ou sur la carte "Generate Partner Certificate" :
-
-![Générer un certificat partenaire](/screenshots/generate-partner-cert.png)
-
-Remplissez le formulaire :
-- **Partner ID** : Identifiant unique du partenaire (ex: `BANQUE_XYZ`)
-- **Common Name** : FQDN ou nom du certificat (ex: `banque-xyz.example.com`)
-- **Purpose** : `Client (mTLS)` pour l'authentification client
-- **Validity** : Durée de validité en jours (défaut: 365)
-
-![Formulaire de génération](/screenshots/generate-form.png)
-
-### 3. Télécharger le certificat CA
-
-Pour que les clients puissent faire confiance au serveur, ils doivent importer le certificat CA dans leur truststore.
-
-Cliquez sur **Download CA Cert** :
-
-![Télécharger le certificat CA](/screenshots/download-ca-cert.png)
-
-Vous pouvez :
-- **Copier** le certificat dans le presse-papiers
-- **Télécharger** le fichier `pesit-ca.pem`
-
-### 4. Signer un CSR (Certificate Signing Request)
-
-Si un client préfère générer sa propre clé privée, il peut vous envoyer un CSR à signer.
-
-Cliquez sur **Sign CSR** :
-
-![Signer un CSR](/screenshots/sign-csr.png)
-
-1. Collez le CSR (format PEM) fourni par le client
-2. Sélectionnez le **Purpose** et la **Validity**
-3. Optionnellement, associez un **Partner ID**
-4. Cliquez sur **Sign CSR**
-
-Le certificat signé sera affiché et téléchargeable :
-
-![Certificat signé](/screenshots/signed-cert-result.png)
-
-### 5. Visualiser les certificats
-
-L'interface affiche tous les keystores et truststores configurés :
-
-![Liste des certificats](/screenshots/certificates-list.png)
-
-Pour chaque certificat, vous pouvez voir :
-- Le nom et le type (Keystore/Truststore)
-- Le DN du sujet
-- La date d'expiration (en rouge si < 30 jours)
-- Le partenaire associé
-
----
-
-## Configuration mTLS via fichier (avancé)
-
-Pour les déploiements automatisés, vous pouvez également utiliser l'API REST ou le fichier de configuration.
-
-### Initialiser la CA via API
+L'administrateur de sécurité initialise la CA via l'API serveur :
 
 ```bash
+# Initialiser la CA (accès admin requis)
 curl -X POST http://localhost:8080/api/v1/certificates/ca/initialize \
   -u admin:admin
 ```
 
-### Configurer mTLS
+### Génération des certificats
+
+L'administrateur génère les certificats pour chaque serveur et client :
+
+```bash
+# Certificat pour un serveur
+curl -X POST "http://localhost:8080/api/v1/certificates/ca/partner/SERVER_PROD/generate" \
+  -u admin:admin \
+  -d "commonName=pesit.example.com&purpose=SERVER&validityDays=365"
+
+# Certificat pour un client/partenaire
+curl -X POST "http://localhost:8080/api/v1/certificates/ca/partner/BANQUE_XYZ/generate" \
+  -u admin:admin \
+  -d "commonName=banque-xyz.example.com&purpose=CLIENT&validityDays=365"
+```
+
+### Distribution sécurisée
+
+L'administrateur distribue ensuite :
+1. **Au serveur** : Son keystore + le truststore CA
+2. **Aux clients** : Leur keystore + le certificat CA (pour leur truststore)
+
+---
+
+## Configuration TLS côté Client
+
+### Interface utilisateur Client
+
+Le client PeSIT Wizard dispose d'une interface **TLS Config** pour importer les certificats reçus de l'administrateur.
+
+Dans le menu latéral, cliquez sur **TLS Config** :
+
+![Navigation vers TLS Config](/screenshots/tls-config-nav.png)
+
+### 1. Importer le Truststore (Certificat CA)
+
+Pour faire confiance au serveur PeSIT, importez le certificat CA :
+
+![Import Truststore](/screenshots/tls-import-truststore.png)
+
+1. Cliquez sur **Import Truststore**
+2. Sélectionnez le fichier CA reçu de l'administrateur (.p12, .jks, ou .pem)
+3. Entrez le mot de passe si nécessaire
+
+### 2. Importer le Keystore (Certificat Client)
+
+Pour l'authentification mTLS, importez votre certificat client :
+
+![Import Keystore](/screenshots/tls-import-keystore.png)
+
+1. Cliquez sur **Import Keystore**
+2. Sélectionnez le fichier keystore reçu de l'administrateur (.p12 ou .jks)
+3. Entrez le mot de passe du keystore
+
+### 3. Activer TLS
+
+Une fois les deux certificats importés, activez TLS :
+
+![TLS Enabled](/screenshots/tls-enabled.png)
+
+---
+
+## Configuration mTLS côté Serveur
+
+### Fichier de configuration
 
 ```yaml
 pesitwizard:

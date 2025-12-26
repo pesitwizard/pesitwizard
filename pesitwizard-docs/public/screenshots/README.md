@@ -55,18 +55,11 @@ screenshots/
 | `schedules.png` | Schedules | Liste des planifications |
 | `schedule-create.png` | Favorites | Modal de création de planification |
 | `calendars.png` | Calendars | Liste des calendriers métier |
-| `certificates-nav.png` | Navigation | Menu latéral avec Certificates surligné |
-| `ca-init.png` | Certificates | CA non initialisée avec bouton Initialize |
-| `ca-initialized.png` | Certificates | CA initialisée avec statut vert |
-| `generate-partner-cert.png` | Certificates | Cards d'actions CA |
-| `generate-form.png` | Certificates | Modal de génération certificat partenaire |
-| `download-ca-cert.png` | Certificates | Modal téléchargement certificat CA |
-| `sign-csr.png` | Certificates | Modal signature CSR vide |
-| `signed-cert-result.png` | Certificates | Modal avec certificat signé |
-| `certificates-list.png` | Certificates | Liste keystores/truststores |
-| `client-download-ca.png` | Certificates | Téléchargement CA pour client |
-| `sign-client-csr.png` | Certificates | Signature du CSR client |
-| `workflow-generated-cert.png` | Certificates | Diagramme workflow Option 1 |
+| `tls-config-nav.png` | Navigation | Menu latéral avec TLS Config surligné |
+| `tls-import-truststore.png` | TLS Config | Modal import truststore (CA) |
+| `tls-import-keystore.png` | TLS Config | Modal import keystore (client cert) |
+| `tls-enabled.png` | TLS Config | Vue avec TLS activé et certificats configurés |
+| `tls-status.png` | TLS Config | Statut TLS avec informations certificats |
 
 #### Admin UI (http://localhost:3000)
 

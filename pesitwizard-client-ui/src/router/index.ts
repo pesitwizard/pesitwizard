@@ -48,9 +48,9 @@ const router = createRouter({
           component: () => import('../views/ConnectorsView.vue')
         },
         {
-          path: 'certificates',
-          name: 'certificates',
-          component: () => import('../views/CertificatesView.vue')
+          path: 'tls',
+          name: 'tls',
+          component: () => import('../views/TlsConfigView.vue')
         },
         {
           path: 'settings',
