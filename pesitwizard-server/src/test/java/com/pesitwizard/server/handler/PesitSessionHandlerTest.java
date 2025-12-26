@@ -256,4 +256,73 @@ class PesitSessionHandlerTest {
         ctx.setTransferRecordId("transfer-123");
         assertEquals("transfer-123", ctx.getTransferRecordId());
     }
+
+    @Test
+    @DisplayName("session should track partner config")
+    void sessionShouldTrackPartnerConfig() {
+        SessionContext ctx = handler.createSession("192.168.1.100");
+
+        assertNull(ctx.getPartnerConfig());
+
+        com.pesitwizard.server.config.PartnerConfig partner = new com.pesitwizard.server.config.PartnerConfig();
+        partner.setId("PARTNER_A");
+        ctx.setPartnerConfig(partner);
+
+        assertNotNull(ctx.getPartnerConfig());
+        assertEquals("PARTNER_A", ctx.getPartnerConfig().getId());
+    }
+
+    @Test
+    @DisplayName("session should track logical file config")
+    void sessionShouldTrackLogicalFileConfig() {
+        SessionContext ctx = handler.createSession("192.168.1.100");
+
+        assertNull(ctx.getLogicalFileConfig());
+
+        com.pesitwizard.server.config.LogicalFileConfig fileConfig = new com.pesitwizard.server.config.LogicalFileConfig() {
+            @Override
+            public String getName() {
+                return "FILE1";
+            }
+
+            @Override
+            public boolean isEnabled() {
+                return true;
+            }
+
+            @Override
+            public boolean canReceive() {
+                return true;
+            }
+
+            @Override
+            public boolean canSend() {
+                return true;
+            }
+
+            @Override
+            public String getLocalPath() {
+                return "/data/files";
+            }
+
+            @Override
+            public String getFilenamePattern() {
+                return "${virtualFile}.dat";
+            }
+        };
+        ctx.setLogicalFileConfig(fileConfig);
+
+        assertNotNull(ctx.getLogicalFileConfig());
+        assertEquals("FILE1", ctx.getLogicalFileConfig().getName());
+    }
+
+    @Test
+    @DisplayName("processIncomingFpdu should throw for invalid FPDU data")
+    void processIncomingFpduShouldThrowForInvalidData() {
+        SessionContext ctx = handler.createSession("192.168.1.100");
+        byte[] invalidData = new byte[] { 0x00, 0x01, 0x02 }; // Too short to be valid
+
+        assertThrows(IllegalArgumentException.class,
+                () -> handler.processIncomingFpdu(ctx, invalidData, null));
+    }
 }
