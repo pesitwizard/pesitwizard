@@ -50,7 +50,7 @@ const router = createRouter({
         {
           path: 'tls',
           name: 'tls',
-          component: () => import('../views/TlsConfigView.vue')
+          redirect: { name: 'servers' }
         },
         {
           path: 'settings',
