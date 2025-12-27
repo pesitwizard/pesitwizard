@@ -160,27 +160,38 @@ function onKeystoreFileChange(event: Event) {
 }
 
 async function uploadTruststore() {
-  if (!truststoreFile.value || !truststorePassword.value) {
-    tlsError.value = 'Please select a file and enter the password'
+  if (!truststoreFile.value) {
+    tlsError.value = 'Please select a certificate file'
     return
   }
+  
+  // Check if password is required (for non-PEM files)
+  const filename = truststoreFile.value.name.toLowerCase()
+  const isPem = filename.endsWith('.pem') || filename.endsWith('.crt') || filename.endsWith('.cer')
+  if (!isPem && !truststorePassword.value) {
+    tlsError.value = 'Password is required for PKCS12 files'
+    return
+  }
+  
   uploading.value = true
   tlsError.value = ''
   tlsSuccess.value = ''
   try {
     const formData = new FormData()
     formData.append('file', truststoreFile.value)
-    formData.append('password', truststorePassword.value)
+    if (truststorePassword.value) {
+      formData.append('password', truststorePassword.value)
+    }
     const response = await api.post(`/servers/${tlsServerId.value}/tls/truststore`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
-    tlsSuccess.value = response.data.message || 'Truststore uploaded successfully'
+    tlsSuccess.value = response.data.message || 'CA certificate uploaded successfully'
     tlsStatus.value.truststoreConfigured = true
     truststoreFile.value = null
     truststorePassword.value = ''
     await loadServers()
   } catch (e: any) {
-    tlsError.value = e.response?.data?.error || 'Failed to upload truststore'
+    tlsError.value = e.response?.data?.error || 'Failed to upload certificate'
   } finally {
     uploading.value = false
   }
@@ -433,12 +444,13 @@ async function deleteKeystore() {
 
               <div class="space-y-3">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">PKCS12 File (.p12)</label>
-                  <input type="file" @change="onTruststoreFileChange" accept=".p12,.pfx" class="input text-sm" />
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Certificate File</label>
+                  <input type="file" @change="onTruststoreFileChange" accept=".pem,.crt,.cer,.p12,.pfx" class="input text-sm" />
+                  <p class="text-xs text-gray-500 mt-1">PEM (.pem, .crt, .cer) or PKCS12 (.p12, .pfx)</p>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                  <input v-model="truststorePassword" type="password" class="input" placeholder="Keystore password" />
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Password <span class="text-gray-400">(PKCS12 only)</span></label>
+                  <input v-model="truststorePassword" type="password" class="input" placeholder="Not required for PEM files" />
                 </div>
                 <button 
                   @click="uploadTruststore" 
@@ -446,7 +458,7 @@ async function deleteKeystore() {
                   :disabled="uploading || !truststoreFile"
                 >
                   <Upload class="h-4 w-4" />
-                  {{ uploading ? 'Uploading...' : 'Upload Truststore' }}
+                  {{ uploading ? 'Uploading...' : 'Upload CA Certificate' }}
                 </button>
               </div>
             </div>

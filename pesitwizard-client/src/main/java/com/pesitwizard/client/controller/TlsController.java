@@ -1,7 +1,9 @@
 package com.pesitwizard.client.controller;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -52,48 +54,78 @@ public class TlsController {
     }
 
     /**
-     * Upload and validate a truststore (CA certificate) for TLS connections
+     * Upload and validate a truststore (CA certificate) for TLS connections.
+     * Accepts both PKCS12 keystores and PEM certificates.
      */
     @PostMapping("/truststore")
     public ResponseEntity<Map<String, Object>> uploadTruststore(
             @PathVariable String serverId,
             @RequestParam("file") MultipartFile file,
-            @RequestParam("password") String password) {
+            @RequestParam(value = "password", required = false) String password) {
 
         return serverRepository.findById(serverId)
                 .map(server -> {
                     try {
                         byte[] data = file.getBytes();
-
-                        // Validate the truststore with the provided password
-                        KeyStore trustStore = KeyStore.getInstance("PKCS12");
-                        try (ByteArrayInputStream bis = new ByteArrayInputStream(data)) {
-                            trustStore.load(bis, password.toCharArray());
-                        }
-
-                        // Get certificate info for response
+                        String filename = file.getOriginalFilename();
                         String certSubject = null;
                         String certExpiry = null;
-                        Enumeration<String> aliases = trustStore.aliases();
-                        if (aliases.hasMoreElements()) {
-                            String alias = aliases.nextElement();
-                            java.security.cert.Certificate cert = trustStore.getCertificate(alias);
-                            if (cert instanceof X509Certificate x509) {
-                                certSubject = x509.getSubjectX500Principal().getName();
-                                certExpiry = x509.getNotAfter().toInstant().toString();
+                        byte[] truststoreData;
+                        String truststorePassword;
+
+                        // Check if it's a PEM file
+                        if (filename != null && (filename.endsWith(".pem") || filename.endsWith(".crt")
+                                || filename.endsWith(".cer"))) {
+                            // Parse PEM certificate
+                            String pemContent = new String(data);
+                            X509Certificate cert = parsePemCertificate(pemContent);
+
+                            certSubject = cert.getSubjectX500Principal().getName();
+                            certExpiry = cert.getNotAfter().toInstant().toString();
+
+                            // Convert to PKCS12 truststore for storage
+                            truststorePassword = "changeit"; // Default password for converted truststore
+                            truststoreData = convertCertToTruststore(cert, truststorePassword);
+
+                            log.info("PEM certificate converted to truststore for server {}", serverId);
+                        } else {
+                            // Assume PKCS12 format
+                            if (password == null || password.isEmpty()) {
+                                Map<String, Object> error = new HashMap<>();
+                                error.put("success", false);
+                                error.put("error", "Password is required for PKCS12 keystores");
+                                return ResponseEntity.badRequest().body(error);
                             }
+
+                            KeyStore trustStore = KeyStore.getInstance("PKCS12");
+                            try (ByteArrayInputStream bis = new ByteArrayInputStream(data)) {
+                                trustStore.load(bis, password.toCharArray());
+                            }
+
+                            Enumeration<String> aliases = trustStore.aliases();
+                            if (aliases.hasMoreElements()) {
+                                String alias = aliases.nextElement();
+                                java.security.cert.Certificate cert = trustStore.getCertificate(alias);
+                                if (cert instanceof X509Certificate x509) {
+                                    certSubject = x509.getSubjectX500Principal().getName();
+                                    certExpiry = x509.getNotAfter().toInstant().toString();
+                                }
+                            }
+
+                            truststoreData = data;
+                            truststorePassword = password;
                         }
 
                         // Store the truststore
-                        server.setTruststoreData(data);
-                        server.setTruststorePassword(password);
+                        server.setTruststoreData(truststoreData);
+                        server.setTruststorePassword(truststorePassword);
                         serverRepository.save(server);
 
-                        log.info("Truststore uploaded for server {}: {} bytes", serverId, data.length);
+                        log.info("Truststore uploaded for server {}: {} bytes", serverId, truststoreData.length);
 
                         Map<String, Object> response = new HashMap<>();
                         response.put("success", true);
-                        response.put("message", "Truststore uploaded and validated successfully");
+                        response.put("message", "CA certificate uploaded and validated successfully");
                         response.put("certSubject", certSubject != null ? certSubject : "Unknown");
                         response.put("certExpiry", certExpiry != null ? certExpiry : "Unknown");
                         return ResponseEntity.ok(response);
@@ -102,11 +134,41 @@ public class TlsController {
                         log.error("Failed to upload truststore for server {}: {}", serverId, e.getMessage());
                         Map<String, Object> error = new HashMap<>();
                         error.put("success", false);
-                        error.put("error", "Invalid truststore or wrong password: " + e.getMessage());
+                        error.put("error", "Invalid certificate: " + e.getMessage());
                         return ResponseEntity.badRequest().body(error);
                     }
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Parse a PEM-encoded X509 certificate
+     */
+    private X509Certificate parsePemCertificate(String pemContent) throws Exception {
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+
+        // Handle both with and without headers
+        String certContent = pemContent;
+        if (!certContent.contains("-----BEGIN")) {
+            certContent = "-----BEGIN CERTIFICATE-----\n" + certContent + "\n-----END CERTIFICATE-----";
+        }
+
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(certContent.getBytes())) {
+            return (X509Certificate) cf.generateCertificate(bis);
+        }
+    }
+
+    /**
+     * Convert an X509 certificate to a PKCS12 truststore
+     */
+    private byte[] convertCertToTruststore(X509Certificate cert, String password) throws Exception {
+        KeyStore trustStore = KeyStore.getInstance("PKCS12");
+        trustStore.load(null, null);
+        trustStore.setCertificateEntry("ca-cert", cert);
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        trustStore.store(bos, password.toCharArray());
+        return bos.toByteArray();
     }
 
     /**
