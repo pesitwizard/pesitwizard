@@ -53,6 +53,27 @@ ingress:
     - host: pesitwizard.local
   tls: []
 
+# TLS Configuration for PeSIT connections
+tls:
+  # Enable TLS for PeSIT connections
+  enabled: true
+  # Generate self-signed certificates during install
+  generateCerts: true
+  # Certificate validity in days
+  validityDays: 365
+  # Client certificate subject
+  subject:
+    commonName: "pesitwizard-client"
+    organization: "PeSIT Wizard"
+    country: "FR"
+  # Existing secret containing keystore/truststore (optional)
+  # If set, generateCerts is ignored
+  existingSecret: ""
+  # Keystore password (auto-generated if empty)
+  keystorePassword: ""
+  # Truststore password (auto-generated if empty)  
+  truststorePassword: ""
+
 # Persistence configuration
 persistence:
   # Database storage (H2 database files)

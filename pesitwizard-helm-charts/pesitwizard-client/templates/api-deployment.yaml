@@ -42,6 +42,24 @@ spec:
               value: "kubernetes,nosecurity"
             - name: SERVER_PORT
               value: "8080"
+            {{- if .Values.tls.enabled }}
+            - name: PESITWIZARD_TLS_ENABLED
+              value: "true"
+            - name: PESITWIZARD_TLS_KEYSTORE_PATH
+              value: "/app/tls/keystore.p12"
+            - name: PESITWIZARD_TLS_KEYSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tls.existingSecret | default (printf "%s-tls" (include "pesitwizard-client.fullname" .)) }}
+                  key: keystore-password
+            - name: PESITWIZARD_TLS_TRUSTSTORE_PATH
+              value: "/app/tls/truststore.p12"
+            - name: PESITWIZARD_TLS_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tls.existingSecret | default (printf "%s-tls" (include "pesitwizard-client.fullname" .)) }}
+                  key: truststore-password
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
@@ -63,6 +81,11 @@ spec:
               mountPath: {{ .Values.persistence.store.mountPath | default "/app/data" }}
             - name: data
               mountPath: {{ .Values.persistence.data.mountPath | default "/app/files" }}
+            {{- if .Values.tls.enabled }}
+            - name: tls-certs
+              mountPath: /app/tls
+              readOnly: true
+            {{- end }}
       volumes:
         - name: store
           {{- if and .Values.persistence.store.enabled .Values.persistence.store.hostPath }}
@@ -86,6 +109,16 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- if .Values.tls.enabled }}
+        - name: tls-certs
+          secret:
+            secretName: {{ .Values.tls.existingSecret | default (printf "%s-tls" (include "pesitwizard-client.fullname" .)) }}
+            items:
+              - key: keystore.p12
+                path: keystore.p12
+              - key: truststore.p12
+                path: truststore.p12
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

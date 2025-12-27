@@ -343,6 +343,75 @@ configure_ingress_port() {
     fi
 }
 
+# Generate TLS certificates
+generate_certificates() {
+    echo ""
+    echo -e "${YELLOW}TLS Certificate Configuration${NC}"
+    
+    # Check if openssl is available
+    if ! command -v openssl &> /dev/null; then
+        echo -e "${RED}WARNING: openssl not found, skipping certificate generation${NC}"
+        echo -e "${BLUE}You can manually configure TLS later via the UI${NC}"
+        TLS_ENABLED=false
+        return
+    fi
+    
+    TLS_ENABLED=true
+    CERT_DIR=$(mktemp -d)
+    KEYSTORE_PASSWORD=$(openssl rand -base64 16 | tr -d '=' | head -c 16)
+    TRUSTSTORE_PASSWORD=$(openssl rand -base64 16 | tr -d '=' | head -c 16)
+    
+    echo -e "${BLUE}Generating self-signed client certificate...${NC}"
+    
+    # Generate private key
+    openssl genrsa -out "$CERT_DIR/client-key.pem" 2048 2>/dev/null
+    
+    # Generate self-signed certificate
+    openssl req -new -x509 \
+        -key "$CERT_DIR/client-key.pem" \
+        -out "$CERT_DIR/client-cert.pem" \
+        -days 365 \
+        -subj "/CN=pesitwizard-client/O=PeSIT Wizard/C=FR" \
+        2>/dev/null
+    
+    # Create PKCS12 keystore
+    openssl pkcs12 -export \
+        -in "$CERT_DIR/client-cert.pem" \
+        -inkey "$CERT_DIR/client-key.pem" \
+        -out "$CERT_DIR/keystore.p12" \
+        -name "client" \
+        -password "pass:$KEYSTORE_PASSWORD" \
+        2>/dev/null
+    
+    # Create truststore with the same cert (self-signed)
+    # In production, this would contain the CA certificate
+    openssl pkcs12 -export \
+        -in "$CERT_DIR/client-cert.pem" \
+        -inkey "$CERT_DIR/client-key.pem" \
+        -out "$CERT_DIR/truststore.p12" \
+        -name "ca" \
+        -password "pass:$TRUSTSTORE_PASSWORD" \
+        2>/dev/null
+    
+    echo -e "${GREEN}✓ Certificates generated${NC}"
+    
+    # Create Kubernetes secret with certificates
+    echo -e "${YELLOW}Creating TLS secret in Kubernetes...${NC}"
+    
+    kubectl create secret generic pesitwizard-client-tls \
+        --namespace "$VECTIS_NAMESPACE" \
+        --from-file=keystore.p12="$CERT_DIR/keystore.p12" \
+        --from-file=truststore.p12="$CERT_DIR/truststore.p12" \
+        --from-literal=keystore-password="$KEYSTORE_PASSWORD" \
+        --from-literal=truststore-password="$TRUSTSTORE_PASSWORD" \
+        --dry-run=client -o yaml | kubectl apply -f -
+    
+    echo -e "${GREEN}✓ TLS secret created${NC}"
+    
+    # Cleanup temp files
+    rm -rf "$CERT_DIR"
+}
+
 # Configure storage paths
 configure_storage() {
     # Default paths
@@ -427,6 +496,12 @@ deploy_helm() {
         HELM_ARGS="$HELM_ARGS --set ui.service.nodePort=$NODE_PORT --set ingress.enabled=false"
     elif [ -n "$INGRESS_HOST" ]; then
         HELM_ARGS="$HELM_ARGS --set ingress.hosts[0].host=$INGRESS_HOST"
+    fi
+    # TLS configuration
+    if [ "$TLS_ENABLED" = true ]; then
+        HELM_ARGS="$HELM_ARGS --set tls.enabled=true --set tls.existingSecret=pesitwizard-client-tls"
+    else
+        HELM_ARGS="$HELM_ARGS --set tls.enabled=false"
     fi
     
     # Install or upgrade using local chart
@@ -514,6 +589,7 @@ main() {
     check_prereqs
     setup_namespace
     configure_ingress_port
+    generate_certificates
     configure_storage
     deploy_helm
     show_access_info
