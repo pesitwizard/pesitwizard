@@ -2,8 +2,8 @@ package com.pesitwizard.client.transport;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.security.KeyStore;
@@ -50,26 +50,27 @@ public class TlsTransportChannel implements TransportChannel {
     }
 
     /**
-     * Create TLS channel with custom truststore
+     * Create TLS channel with custom truststore only (no client cert)
      */
-    public TlsTransportChannel(String host, int port, String truststorePath, String truststorePassword) {
-        this(host, port, truststorePath, truststorePassword, null, null);
+    public TlsTransportChannel(String host, int port, byte[] truststoreData, String truststorePassword) {
+        this(host, port, truststoreData, truststorePassword, null, null);
     }
 
     /**
-     * Create TLS channel with custom truststore and keystore (mutual TLS)
+     * Create TLS channel with custom truststore and keystore from byte arrays
+     * (mutual TLS)
      */
     public TlsTransportChannel(String host, int port,
-            String truststorePath, String truststorePassword,
-            String keystorePath, String keystorePassword) {
+            byte[] truststoreData, String truststorePassword,
+            byte[] keystoreData, String keystorePassword) {
         this.host = host;
         this.port = port;
 
         try {
-            // Load truststore
-            KeyStore trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
-            try (FileInputStream fis = new FileInputStream(truststorePath)) {
-                trustStore.load(fis, truststorePassword != null ? truststorePassword.toCharArray() : null);
+            // Load truststore from byte array
+            KeyStore trustStore = KeyStore.getInstance("PKCS12");
+            try (ByteArrayInputStream bis = new ByteArrayInputStream(truststoreData)) {
+                trustStore.load(bis, truststorePassword != null ? truststorePassword.toCharArray() : null);
             }
 
             TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
@@ -78,10 +79,10 @@ public class TlsTransportChannel implements TransportChannel {
             KeyManager[] keyManagers = null;
 
             // Load keystore for mutual TLS if provided
-            if (keystorePath != null) {
-                KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
-                try (FileInputStream fis = new FileInputStream(keystorePath)) {
-                    keyStore.load(fis, keystorePassword != null ? keystorePassword.toCharArray() : null);
+            if (keystoreData != null && keystoreData.length > 0) {
+                KeyStore keyStore = KeyStore.getInstance("PKCS12");
+                try (ByteArrayInputStream bis = new ByteArrayInputStream(keystoreData)) {
+                    keyStore.load(bis, keystorePassword != null ? keystorePassword.toCharArray() : null);
                 }
 
                 KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
@@ -92,9 +93,9 @@ public class TlsTransportChannel implements TransportChannel {
             this.sslContext = SSLContext.getInstance("TLS");
             this.sslContext.init(keyManagers, tmf.getTrustManagers(), null);
 
-            log.info("TLS context initialized with custom truststore: {}", truststorePath);
-            if (keystorePath != null) {
-                log.info("Mutual TLS enabled with keystore: {}", keystorePath);
+            log.info("TLS context initialized with uploaded truststore ({} bytes)", truststoreData.length);
+            if (keystoreData != null) {
+                log.info("Mutual TLS enabled with uploaded keystore ({} bytes)", keystoreData.length);
             }
 
         } catch (Exception e) {

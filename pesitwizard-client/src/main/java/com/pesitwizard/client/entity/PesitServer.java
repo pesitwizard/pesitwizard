@@ -55,16 +55,18 @@ public class PesitServer {
     @Builder.Default
     private boolean tlsEnabled = false;
 
-    /** Path to truststore for TLS */
-    private String truststorePath;
+    /** Truststore data (PKCS12 format) for TLS */
+    @Column(columnDefinition = "bytea")
+    private byte[] truststoreData;
 
-    /** Truststore password (encrypted) */
+    /** Truststore password */
     private String truststorePassword;
 
-    /** Path to keystore for mutual TLS */
-    private String keystorePath;
+    /** Keystore data (PKCS12 format) for mutual TLS */
+    @Column(columnDefinition = "bytea")
+    private byte[] keystoreData;
 
-    /** Keystore password (encrypted) */
+    /** Keystore password */
     private String keystorePassword;
 
     /** Connection timeout in milliseconds */

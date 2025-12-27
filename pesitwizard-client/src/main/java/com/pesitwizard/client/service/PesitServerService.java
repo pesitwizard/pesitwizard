@@ -139,10 +139,7 @@ public class PesitServerService {
                 .serverId(dto.getServerId())
                 .description(dto.getDescription())
                 .tlsEnabled(dto.isTlsEnabled())
-                .truststorePath(dto.getTruststorePath())
-                .truststorePassword(dto.getTruststorePassword()) // TODO: encrypt
-                .keystorePath(dto.getKeystorePath())
-                .keystorePassword(dto.getKeystorePassword()) // TODO: encrypt
+                // TLS certificates are uploaded separately via dedicated endpoints
                 .connectionTimeout(dto.getConnectionTimeout())
                 .readTimeout(dto.getReadTimeout())
                 .enabled(dto.isEnabled())
@@ -157,14 +154,7 @@ public class PesitServerService {
         server.setServerId(dto.getServerId());
         server.setDescription(dto.getDescription());
         server.setTlsEnabled(dto.isTlsEnabled());
-        server.setTruststorePath(dto.getTruststorePath());
-        if (dto.getTruststorePassword() != null) {
-            server.setTruststorePassword(dto.getTruststorePassword()); // TODO: encrypt
-        }
-        server.setKeystorePath(dto.getKeystorePath());
-        if (dto.getKeystorePassword() != null) {
-            server.setKeystorePassword(dto.getKeystorePassword()); // TODO: encrypt
-        }
+        // TLS certificates are uploaded separately via dedicated endpoints
         server.setConnectionTimeout(dto.getConnectionTimeout());
         server.setReadTimeout(dto.getReadTimeout());
         server.setEnabled(dto.isEnabled());
@@ -180,10 +170,8 @@ public class PesitServerService {
                 .serverId(server.getServerId())
                 .description(server.getDescription())
                 .tlsEnabled(server.isTlsEnabled())
-                .truststorePath(server.getTruststorePath())
-                // Don't expose truststore password
-                .keystorePath(server.getKeystorePath())
-                // Don't expose keystore password
+                .truststoreConfigured(server.getTruststoreData() != null && server.getTruststoreData().length > 0)
+                .keystoreConfigured(server.getKeystoreData() != null && server.getKeystoreData().length > 0)
                 .connectionTimeout(server.getConnectionTimeout())
                 .readTimeout(server.getReadTimeout())
                 .enabled(server.isEnabled())

@@ -39,10 +39,10 @@ public class PesitServerDto {
     @Builder.Default
     private boolean tlsEnabled = false;
 
-    private String truststorePath;
-    private String truststorePassword;
-    private String keystorePath;
-    private String keystorePassword;
+    // Indicates if truststore is configured (don't expose actual data in DTO)
+    private boolean truststoreConfigured;
+    // Indicates if keystore is configured
+    private boolean keystoreConfigured;
 
     @Builder.Default
     private Integer connectionTimeout = 30000;

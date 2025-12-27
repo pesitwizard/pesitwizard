@@ -382,13 +382,13 @@ public class TransferService {
 
         private TransportChannel createChannel(PesitServer server) {
                 if (server.isTlsEnabled()) {
-                        if (server.getTruststorePath() != null) {
+                        if (server.getTruststoreData() != null && server.getTruststoreData().length > 0) {
                                 return new TlsTransportChannel(
                                                 server.getHost(),
                                                 server.getPort(),
-                                                server.getTruststorePath(),
+                                                server.getTruststoreData(),
                                                 server.getTruststorePassword(),
-                                                server.getKeystorePath(),
+                                                server.getKeystoreData(),
                                                 server.getKeystorePassword());
                         }
                         return new TlsTransportChannel(server.getHost(), server.getPort());
