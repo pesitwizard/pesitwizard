@@ -19,6 +19,7 @@ import javax.net.ssl.TrustManagerFactory;
 
 import org.springframework.stereotype.Component;
 
+import com.pesitwizard.server.config.SslProperties;
 import com.pesitwizard.server.entity.CertificateStore;
 import com.pesitwizard.server.entity.CertificateStore.StoreType;
 import com.pesitwizard.server.repository.CertificateStoreRepository;
@@ -29,6 +30,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Factory for creating SSL contexts from centrally managed certificates.
  * Supports JKS, PKCS12, and PEM formats.
+ * Also supports loading certificates from environment variables for Kubernetes
+ * deployments.
  */
 @Slf4j
 @Component
@@ -36,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SslContextFactory {
 
     private final CertificateStoreRepository certificateRepository;
+    private final SslProperties sslProperties;
 
     private static final String TLS_PROTOCOL = "TLSv1.3";
     private static final String FALLBACK_PROTOCOL = "TLSv1.2";
@@ -56,10 +60,18 @@ public class SslContextFactory {
     }
 
     /**
-     * Create an SSL context using named keystore and truststore
+     * Create an SSL context using named keystore and truststore.
+     * If environment variable based certificates are configured, those take
+     * precedence.
      */
     public SSLContext createSslContext(String keystoreName, String truststoreName)
             throws SslConfigurationException {
+
+        // Check if we have environment variable based certificates (Kubernetes
+        // deployment)
+        if (sslProperties.getKeystoreData() != null && !sslProperties.getKeystoreData().isEmpty()) {
+            return createSslContextFromEnvVars();
+        }
 
         CertificateStore keystore = certificateRepository
                 .findByNameAndStoreType(keystoreName, StoreType.KEYSTORE)
@@ -81,6 +93,74 @@ public class SslContextFactory {
         }
 
         return createSslContext(keystore, truststore);
+    }
+
+    /**
+     * Create an SSL context from environment variable based certificates.
+     * Used in Kubernetes deployments where certificates are passed via ConfigMap.
+     */
+    public SSLContext createSslContextFromEnvVars() throws SslConfigurationException {
+        try {
+            String keystoreData = sslProperties.getKeystoreData();
+            String keystorePassword = sslProperties.getKeystorePassword();
+            String caCertPem = sslProperties.getCaCertPem();
+
+            if (keystoreData == null || keystoreData.isEmpty()) {
+                throw new SslConfigurationException("No keystore data provided in environment variables");
+            }
+
+            log.info("Creating SSL context from environment variable certificates");
+
+            // Decode and load keystore
+            byte[] keystoreBytes = java.util.Base64.getDecoder().decode(keystoreData);
+            KeyStore keyStore = KeyStore.getInstance("PKCS12");
+            try (ByteArrayInputStream bis = new ByteArrayInputStream(keystoreBytes)) {
+                char[] password = keystorePassword != null ? keystorePassword.toCharArray() : null;
+                keyStore.load(bis, password);
+            }
+
+            // Initialize key manager
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(keyStore, keystorePassword != null ? keystorePassword.toCharArray() : null);
+
+            // Build truststore from CA certificate PEM if provided
+            TrustManagerFactory tmf = null;
+            if (caCertPem != null && !caCertPem.isEmpty()) {
+                KeyStore trustStore = KeyStore.getInstance("PKCS12");
+                trustStore.load(null, null);
+
+                // Parse PEM certificate
+                CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                try (ByteArrayInputStream bis = new ByteArrayInputStream(caCertPem.getBytes())) {
+                    X509Certificate caCert = (X509Certificate) cf.generateCertificate(bis);
+                    trustStore.setCertificateEntry("ca-cert", caCert);
+                    log.info("Loaded CA certificate: {}", caCert.getSubjectX500Principal().getName());
+                }
+
+                tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                tmf.init(trustStore);
+            }
+
+            // Create SSL context
+            SSLContext sslContext;
+            try {
+                sslContext = SSLContext.getInstance(TLS_PROTOCOL);
+            } catch (Exception e) {
+                log.warn("TLSv1.3 not available, falling back to TLSv1.2");
+                sslContext = SSLContext.getInstance(FALLBACK_PROTOCOL);
+            }
+
+            sslContext.init(kmf.getKeyManagers(), tmf != null ? tmf.getTrustManagers() : null, null);
+            log.info("SSL context created successfully from environment variables");
+
+            return sslContext;
+
+        } catch (SslConfigurationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SslConfigurationException(
+                    "Failed to create SSL context from environment variables: " + e.getMessage(), e);
+        }
     }
 
     /**
