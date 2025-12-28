@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pesitwizard.client.connector.ConnectorRegistry;
 import com.pesitwizard.client.entity.StorageConnection;
 import com.pesitwizard.client.repository.StorageConnectionRepository;
+import com.pesitwizard.client.security.SecretsService;
 import com.pesitwizard.connector.ConfigParameter;
 import com.pesitwizard.connector.ConnectorException;
 import com.pesitwizard.connector.ConnectorFactory;
@@ -39,6 +40,12 @@ public class ConnectorController {
     private final ConnectorRegistry connectorRegistry;
     private final StorageConnectionRepository connectionRepository;
     private final ObjectMapper objectMapper;
+    private final SecretsService secretsService;
+
+    // Fields that should be encrypted in connector configs
+    private static final List<String> SENSITIVE_FIELDS = List.of(
+            "password", "secret", "secretKey", "accessKeySecret",
+            "privateKey", "passphrase", "apiKey", "token");
 
     // ========== Connector Types ==========
 
@@ -116,10 +123,12 @@ public class ConnectorController {
                     .body(Map.of("error", "Unknown connector type: " + request.connectorType()));
         }
         try {
+            // Encrypt sensitive fields before storing
+            Map<String, String> encryptedConfig = encryptSensitiveFields(request.config());
             StorageConnection connection = StorageConnection.builder()
                     .name(request.name()).description(request.description())
                     .connectorType(request.connectorType())
-                    .configJson(objectMapper.writeValueAsString(request.config()))
+                    .configJson(objectMapper.writeValueAsString(encryptedConfig))
                     .enabled(request.enabled() != null ? request.enabled() : true).build();
             return ResponseEntity.ok(connectionRepository.save(connection));
         } catch (JsonProcessingException e) {
@@ -134,7 +143,9 @@ public class ConnectorController {
                 conn.setName(request.name());
                 conn.setDescription(request.description());
                 conn.setConnectorType(request.connectorType());
-                conn.setConfigJson(objectMapper.writeValueAsString(request.config()));
+                // Encrypt sensitive fields before storing
+                Map<String, String> encryptedConfig = encryptSensitiveFields(request.config());
+                conn.setConfigJson(objectMapper.writeValueAsString(encryptedConfig));
                 if (request.enabled() != null)
                     conn.setEnabled(request.enabled());
                 return ResponseEntity.ok(connectionRepository.save(conn));
@@ -158,6 +169,8 @@ public class ConnectorController {
             try {
                 Map<String, String> config = objectMapper.readValue(conn.getConfigJson(), new TypeReference<>() {
                 });
+                // Decrypt sensitive fields before using
+                config = decryptSensitiveFields(config);
                 StorageConnector connector = connectorRegistry.createConnector(conn.getConnectorType(), config);
                 boolean success = connector.testConnection();
                 connector.close();
@@ -185,6 +198,8 @@ public class ConnectorController {
             try {
                 Map<String, String> config = objectMapper.readValue(conn.getConfigJson(), new TypeReference<>() {
                 });
+                // Decrypt sensitive fields before using
+                config = decryptSensitiveFields(config);
                 StorageConnector connector = connectorRegistry.createConnector(conn.getConnectorType(), config);
                 var files = connector.list(path);
                 connector.close();
@@ -216,5 +231,37 @@ public class ConnectorController {
 
     public record ConnectionRequest(String name, String description, String connectorType,
             Map<String, String> config, Boolean enabled) {
+    }
+
+    // ========== Helper Methods ==========
+
+    /**
+     * Encrypt sensitive fields in config before storing
+     */
+    private Map<String, String> encryptSensitiveFields(Map<String, String> config) {
+        if (config == null)
+            return null;
+        Map<String, String> result = new java.util.HashMap<>(config);
+        for (String field : SENSITIVE_FIELDS) {
+            if (result.containsKey(field) && result.get(field) != null) {
+                result.put(field, secretsService.encrypt(result.get(field)));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Decrypt sensitive fields in config before using
+     */
+    private Map<String, String> decryptSensitiveFields(Map<String, String> config) {
+        if (config == null)
+            return null;
+        Map<String, String> result = new java.util.HashMap<>(config);
+        for (String field : SENSITIVE_FIELDS) {
+            if (result.containsKey(field) && result.get(field) != null) {
+                result.put(field, secretsService.decrypt(result.get(field)));
+            }
+        }
+        return result;
     }
 }
