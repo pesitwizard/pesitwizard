@@ -418,6 +418,8 @@ public class TransferService {
                                         connection.getConfigJson(),
                                         new TypeReference<java.util.Map<String, String>>() {
                                         });
+                        // Decrypt sensitive fields before using
+                        config = decryptSensitiveFields(config);
                         return connectorRegistry.createConnector(connection.getConnectorType(), config);
                 } catch (Exception e) {
                         throw new IllegalArgumentException(
@@ -425,6 +427,23 @@ public class TransferService {
                                                         + e.getMessage(),
                                         e);
                 }
+        }
+
+        // Sensitive fields that need decryption
+        private static final java.util.List<String> SENSITIVE_FIELDS = java.util.List.of(
+                        "password", "secret", "secretKey", "accessKeySecret",
+                        "privateKey", "passphrase", "apiKey", "token");
+
+        private java.util.Map<String, String> decryptSensitiveFields(java.util.Map<String, String> config) {
+                if (config == null)
+                        return null;
+                java.util.Map<String, String> result = new java.util.HashMap<>(config);
+                for (String field : SENSITIVE_FIELDS) {
+                        if (result.containsKey(field) && result.get(field) != null) {
+                                result.put(field, secretsService.decrypt(result.get(field)));
+                        }
+                }
+                return result;
         }
 
         private TransferHistory createHistory(PesitServer server, TransferConfig config,
