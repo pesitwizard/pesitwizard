@@ -11,6 +11,7 @@ import com.pesitwizard.server.entity.Partner;
 import com.pesitwizard.server.entity.VirtualFile;
 import com.pesitwizard.server.repository.PartnerRepository;
 import com.pesitwizard.server.repository.VirtualFileRepository;
+import com.pesitwizard.server.security.SecretsService;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class ConfigService {
     private final PartnerRepository partnerRepository;
     private final VirtualFileRepository virtualFileRepository;
     private final PesitServerProperties serverProperties;
+    private final SecretsService secretsService;
 
     /**
      * Initialize database with YAML-configured partners and files if empty
@@ -112,6 +114,15 @@ public class ConfigService {
     @Transactional
     public Partner savePartner(Partner partner) {
         log.info("Saving partner: {}", partner.getId());
+
+        // Encrypt password if Vault is available
+        String password = partner.getPassword();
+        if (password != null && !password.isBlank() && !secretsService.isEncrypted(password)) {
+            String encrypted = secretsService.encrypt(password);
+            partner.setPassword(encrypted);
+            log.debug("Partner password encrypted for storage");
+        }
+
         return partnerRepository.save(partner);
     }
 
