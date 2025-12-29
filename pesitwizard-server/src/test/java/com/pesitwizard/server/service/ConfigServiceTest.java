@@ -21,6 +21,7 @@ import com.pesitwizard.server.entity.Partner;
 import com.pesitwizard.server.entity.VirtualFile;
 import com.pesitwizard.server.repository.PartnerRepository;
 import com.pesitwizard.server.repository.VirtualFileRepository;
+import com.pesitwizard.server.security.SecretsService;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ConfigService Tests")
@@ -34,6 +35,9 @@ class ConfigServiceTest {
 
     @Mock
     private PesitServerProperties serverProperties;
+
+    @Mock
+    private SecretsService secretsService;
 
     @InjectMocks
     private ConfigService configService;
