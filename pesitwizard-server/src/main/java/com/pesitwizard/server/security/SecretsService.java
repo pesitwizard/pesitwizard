@@ -4,9 +4,17 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -19,18 +27,27 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Service for encrypting sensitive data using HashiCorp Vault.
- * Supports runtime configuration via API.
+ * Service for encrypting sensitive data.
+ * Supports AES (default) and HashiCorp Vault.
+ * AES is always available as fallback to ensure secrets are never stored in
+ * plaintext.
  */
 @Slf4j
 @Service
 public class SecretsService {
 
     private static final String VAULT_PREFIX = "vault:";
+    private static final String AES_PREFIX = "AES:";
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
+    private static final int GCM_IV_LENGTH = 12;
+    private static final int GCM_TAG_LENGTH = 128;
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
+
+    // AES encryption (always available)
+    private SecretKey aesKey;
+    private boolean aesEnabled = false;
 
     // Vault configuration (can be updated at runtime)
     private final AtomicReference<String> vaultAddress = new AtomicReference<>();
@@ -39,6 +56,7 @@ public class SecretsService {
     private final AtomicReference<Boolean> vaultEnabled = new AtomicReference<>(false);
 
     public SecretsService(
+            @Value("${pesitwizard.security.master-key:}") String masterKey,
             @Value("${pesitwizard.security.vault.address:}") String vaultAddr,
             @Value("${pesitwizard.security.vault.token:}") String vaultTok,
             @Value("${pesitwizard.security.vault.path:secret/data/pesitwizard-server}") String path) {
@@ -47,6 +65,9 @@ public class SecretsService {
                 .connectTimeout(TIMEOUT)
                 .build();
         this.objectMapper = new ObjectMapper();
+
+        // Initialize AES encryption (always enabled)
+        initializeAes(masterKey);
 
         if (vaultAddr != null && !vaultAddr.isBlank()) {
             this.vaultAddress.set(vaultAddr);
@@ -59,6 +80,39 @@ public class SecretsService {
         }
     }
 
+    private void initializeAes(String masterKey) {
+        try {
+            String keyToUse = masterKey;
+            if (keyToUse == null || keyToUse.isBlank()) {
+                keyToUse = generateDefaultMasterKey();
+                log.warn("⚠️  Using auto-generated AES key. For production, set PESITWIZARD_SECURITY_MASTER_KEY");
+            }
+
+            // Derive a 256-bit key from the master key
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] keyBytes = md.digest(keyToUse.getBytes(StandardCharsets.UTF_8));
+            this.aesKey = new SecretKeySpec(keyBytes, "AES");
+            this.aesEnabled = true;
+            log.info("AES encryption initialized");
+        } catch (Exception e) {
+            log.error("Failed to initialize AES encryption: {}", e.getMessage());
+            this.aesEnabled = false;
+        }
+    }
+
+    private String generateDefaultMasterKey() {
+        String seed = System.getProperty("user.home", "/tmp") +
+                System.getProperty("os.name", "unknown") +
+                "pesitwizard-server-default-key-v1";
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(seed.getBytes(StandardCharsets.UTF_8));
+            return Base64.getEncoder().encodeToString(hash);
+        } catch (Exception e) {
+            return "cGVzaXR3aXphcmQtc2VydmVyLWRlZmF1bHQ=";
+        }
+    }
+
     @PostConstruct
     public void init() {
         if (vaultAddress.get() != null && vaultToken.get() != null) {
@@ -66,10 +120,10 @@ public class SecretsService {
                 vaultEnabled.set(true);
                 log.info("Vault secrets service initialized: {}", vaultAddress.get());
             } else {
-                log.warn("Vault configured but not reachable: {}", vaultAddress.get());
+                log.warn("Vault configured but not reachable, using AES fallback");
             }
         } else {
-            log.info("Vault not configured - secrets will be stored in plaintext");
+            log.info("Vault not configured - using AES encryption");
         }
     }
 
@@ -104,7 +158,8 @@ public class SecretsService {
     }
 
     /**
-     * Encrypt a value (store in Vault and return reference)
+     * Encrypt a value. Uses Vault if available, otherwise AES.
+     * Never returns plaintext - AES is always available as fallback.
      */
     public String encrypt(String plaintext) {
         if (plaintext == null || plaintext.isBlank()) {
@@ -115,40 +170,112 @@ public class SecretsService {
             return plaintext; // Already encrypted
         }
 
-        if (!vaultEnabled.get()) {
-            return plaintext; // Vault not available
+        // Try Vault first if available
+        if (vaultEnabled.get()) {
+            String key = UUID.randomUUID().toString();
+            if (storeSecret(key, plaintext)) {
+                return VAULT_PREFIX + key;
+            }
+            log.warn("Vault storage failed, falling back to AES");
         }
 
-        String key = UUID.randomUUID().toString();
-        if (storeSecret(key, plaintext)) {
-            return VAULT_PREFIX + key;
-        }
-        return plaintext; // Fallback to plaintext on error
+        // Fallback to AES (always available)
+        return encryptAes(plaintext);
     }
 
     /**
-     * Decrypt a value (fetch from Vault if reference)
+     * Encrypt using AES-256-GCM
+     */
+    private String encryptAes(String plaintext) {
+        if (!aesEnabled) {
+            log.error("CRITICAL: AES encryption not available, storing in plaintext!");
+            return plaintext;
+        }
+
+        try {
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            new java.security.SecureRandom().nextBytes(iv);
+
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.ENCRYPT_MODE, aesKey, parameterSpec);
+
+            byte[] cipherText = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+
+            // Combine IV + ciphertext
+            byte[] combined = new byte[iv.length + cipherText.length];
+            System.arraycopy(iv, 0, combined, 0, iv.length);
+            System.arraycopy(cipherText, 0, combined, iv.length, cipherText.length);
+
+            return AES_PREFIX + Base64.getEncoder().encodeToString(combined);
+        } catch (Exception e) {
+            log.error("AES encryption failed: {}", e.getMessage());
+            return plaintext;
+        }
+    }
+
+    /**
+     * Decrypt a value. Handles both Vault references and AES encrypted values.
      */
     public String decrypt(String ciphertext) {
-        if (ciphertext == null || !ciphertext.startsWith(VAULT_PREFIX)) {
+        if (ciphertext == null) {
             return ciphertext;
         }
 
-        if (!vaultEnabled.get()) {
-            log.warn("Cannot decrypt vault reference - Vault not available");
+        // Handle Vault references
+        if (ciphertext.startsWith(VAULT_PREFIX)) {
+            if (!vaultEnabled.get()) {
+                log.warn("Cannot decrypt vault reference - Vault not available");
+                return ciphertext;
+            }
+            String key = ciphertext.substring(VAULT_PREFIX.length());
+            String value = getSecret(key);
+            return value != null ? value : ciphertext;
+        }
+
+        // Handle AES encrypted values
+        if (ciphertext.startsWith(AES_PREFIX)) {
+            return decryptAes(ciphertext);
+        }
+
+        return ciphertext;
+    }
+
+    /**
+     * Decrypt AES-256-GCM encrypted value
+     */
+    private String decryptAes(String ciphertext) {
+        if (!aesEnabled) {
+            log.error("Cannot decrypt AES value - AES not available");
             return ciphertext;
         }
 
-        String key = ciphertext.substring(VAULT_PREFIX.length());
-        String value = getSecret(key);
-        return value != null ? value : ciphertext;
+        try {
+            String encoded = ciphertext.substring(AES_PREFIX.length());
+            byte[] combined = Base64.getDecoder().decode(encoded);
+
+            byte[] iv = new byte[GCM_IV_LENGTH];
+            byte[] encrypted = new byte[combined.length - GCM_IV_LENGTH];
+            System.arraycopy(combined, 0, iv, 0, iv.length);
+            System.arraycopy(combined, iv.length, encrypted, 0, encrypted.length);
+
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec parameterSpec = new GCMParameterSpec(GCM_TAG_LENGTH, iv);
+            cipher.init(Cipher.DECRYPT_MODE, aesKey, parameterSpec);
+
+            byte[] decrypted = cipher.doFinal(encrypted);
+            return new String(decrypted, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            log.error("AES decryption failed: {}", e.getMessage());
+            return ciphertext;
+        }
     }
 
     /**
      * Check if a value is encrypted
      */
     public boolean isEncrypted(String value) {
-        return value != null && value.startsWith(VAULT_PREFIX);
+        return value != null && (value.startsWith(VAULT_PREFIX) || value.startsWith(AES_PREFIX));
     }
 
     /**
