@@ -6,10 +6,10 @@
 set -e
 
 # Default values
-VECTIS_NAMESPACE="${VECTIS_NAMESPACE:-pesitwizard}"
+PESITWIZARD_NAMESPACE="${PESITWIZARD_NAMESPACE:-pesitwizard}"
 GITHUB_REPO="cpoder/pesitwizard"
 HELM_CHART_PATH="pesitwizard-helm-charts/pesitwizard-client"
-HELM_CHART_BRANCH="${VECTIS_VERSION:-main}"
+HELM_CHART_BRANCH="${PESITWIZARD_VERSION:-main}"
 INSTALL_K3S=false
 INTERACTIVE=true
 STORAGE_PATH=""
@@ -37,7 +37,7 @@ parse_args() {
                 shift
                 ;;
             --namespace|-n)
-                VECTIS_NAMESPACE="$2"
+                PESITWIZARD_NAMESPACE="$2"
                 shift 2
                 ;;
             --version|-v)
@@ -70,7 +70,7 @@ parse_args() {
 }
 
 show_help() {
-    echo "Vectis Client Installer"
+    echo "PeSIT Wizard Client Installer"
     echo ""
     echo "Usage: $0 [OPTIONS]"
     echo ""
@@ -93,7 +93,7 @@ show_help() {
     echo "  # Install with NodePort on port 30080"
     echo "  curl -fsSL ... | bash -s -- --port 30080"
     echo ""
-    echo "  # Install k3s if needed, then install Vectis"
+    echo "  # Install k3s if needed, then install PeSIT Wizard"
     echo "  curl -fsSL ... | bash -s -- --install-k3s"
 }
 
@@ -150,7 +150,7 @@ prompt_value() {
 show_banner() {
     echo ""
     echo "╔═══════════════════════════════════════════╗"
-    echo "║        Vectis Client Installer            ║"
+    echo "║      PeSIT Wizard Client Installer        ║"
     echo "╚═══════════════════════════════════════════╝"
     echo ""
 }
@@ -257,9 +257,9 @@ setup_namespace() {
     echo ""
     echo -e "${YELLOW}Setting up namespace...${NC}"
     
-    kubectl create namespace "$VECTIS_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+    kubectl create namespace "$PESITWIZARD_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
     
-    echo -e "${GREEN}✓ Namespace '$VECTIS_NAMESPACE' ready${NC}"
+    echo -e "${GREEN}✓ Namespace '$PESITWIZARD_NAMESPACE' ready${NC}"
 }
 
 # Detect and configure Ingress Controller port
@@ -399,7 +399,7 @@ generate_certificates() {
     echo -e "${YELLOW}Creating TLS secret in Kubernetes...${NC}"
     
     kubectl create secret generic pesitwizard-client-tls \
-        --namespace "$VECTIS_NAMESPACE" \
+        --namespace "$PESITWIZARD_NAMESPACE" \
         --from-file=keystore.p12="$CERT_DIR/keystore.p12" \
         --from-file=truststore.p12="$CERT_DIR/truststore.p12" \
         --from-literal=keystore-password="$KEYSTORE_PASSWORD" \
@@ -507,7 +507,7 @@ deploy_helm() {
     # Install or upgrade using local chart
     echo -e "${YELLOW}Installing Helm chart...${NC}"
     helm upgrade --install pesitwizard-client "$CHART_DIR" \
-        --namespace "$VECTIS_NAMESPACE" \
+        --namespace "$PESITWIZARD_NAMESPACE" \
         $HELM_ARGS
     
     echo -e "${GREEN}✓ Helm release deployed${NC}"
@@ -515,12 +515,12 @@ deploy_helm() {
     echo -e "${YELLOW}Waiting for pods to be ready...${NC}"
     
     # Wait for deployments with progress feedback
-    DEPLOYMENTS=$(kubectl get deployments -n "$VECTIS_NAMESPACE" -l app.kubernetes.io/instance=pesitwizard-client -o name 2>/dev/null || true)
+    DEPLOYMENTS=$(kubectl get deployments -n "$PESITWIZARD_NAMESPACE" -l app.kubernetes.io/instance=pesitwizard-client -o name 2>/dev/null || true)
     
     if [ -n "$DEPLOYMENTS" ]; then
         for deploy in $DEPLOYMENTS; do
             echo -n "  Waiting for $deploy... "
-            if kubectl rollout status "$deploy" -n "$VECTIS_NAMESPACE" --timeout=5m 2>/dev/null; then
+            if kubectl rollout status "$deploy" -n "$PESITWIZARD_NAMESPACE" --timeout=5m 2>/dev/null; then
                 echo -e "${GREEN}ready${NC}"
             else
                 echo -e "${YELLOW}timeout (check manually)${NC}"
@@ -528,7 +528,7 @@ deploy_helm() {
         done
     fi
     
-    echo -e "${GREEN}✓ Vectis Client installed${NC}"
+    echo -e "${GREEN}✓ PeSIT Wizard Client installed${NC}"
 }
 
 # Show access info
@@ -575,10 +575,10 @@ show_access_info() {
     
     echo ""
     echo "To check status:"
-    echo -e "  ${BLUE}kubectl get pods -n $VECTIS_NAMESPACE${NC}"
+    echo -e "  ${BLUE}kubectl get pods -n $PESITWIZARD_NAMESPACE${NC}"
     echo ""
     echo "To uninstall:"
-    echo -e "  ${BLUE}helm uninstall pesitwizard-client -n $VECTIS_NAMESPACE${NC}"
+    echo -e "  ${BLUE}helm uninstall pesitwizard-client -n $PESITWIZARD_NAMESPACE${NC}"
     echo ""
 }
 

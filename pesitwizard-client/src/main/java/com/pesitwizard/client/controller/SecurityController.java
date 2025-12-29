@@ -83,4 +83,66 @@ public class SecurityController {
                     "message", "Encryption test failed: " + e.getMessage()));
         }
     }
+
+    /**
+     * Test Vault connection
+     */
+    @PostMapping("/vault/test")
+    public ResponseEntity<Map<String, Object>> testVault(@RequestBody Map<String, String> request) {
+        String address = request.get("address");
+        String token = request.get("token");
+
+        if (address == null || address.isBlank() || token == null || token.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Vault address and token are required"));
+        }
+
+        try {
+            var httpClient = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(5))
+                    .build();
+
+            var httpRequest = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(address + "/v1/sys/health"))
+                    .header("X-Vault-Token", token)
+                    .timeout(java.time.Duration.ofSeconds(5))
+                    .GET()
+                    .build();
+
+            var response = httpClient.send(httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200 || response.statusCode() == 429) {
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "message", "Vault connection successful",
+                        "details", Map.of("raw", response.body())));
+            } else {
+                return ResponseEntity.ok(Map.of(
+                        "success", false,
+                        "message", "Vault returned status " + response.statusCode()));
+            }
+        } catch (Exception e) {
+            log.error("Vault test failed: {}", e.getMessage());
+            return ResponseEntity.ok(Map.of(
+                    "success", false,
+                    "message", "Connection failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Get Vault configuration instructions
+     */
+    @GetMapping("/vault/config")
+    public ResponseEntity<Map<String, Object>> getVaultConfig() {
+        return ResponseEntity.ok(Map.of(
+                "instructions", "To connect to Vault, set these environment variables and restart:",
+                "variables", Map.of(
+                        "PESITWIZARD_SECURITY_MODE", "VAULT",
+                        "PESITWIZARD_SECURITY_VAULT_ADDRESS", "http://localhost:30200",
+                        "PESITWIZARD_SECURITY_VAULT_TOKEN", "<your-token>",
+                        "PESITWIZARD_SECURITY_VAULT_PATH", "secret/data/pesitwizard-client"),
+                "vaultAvailable", secretsService.isVaultAvailable(),
+                "currentMode", secretsService.getMode()));
+    }
 }

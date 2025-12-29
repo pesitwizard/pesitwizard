@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Zap, Info, Check, Shield, Key, AlertTriangle, Copy, RefreshCw } from 'lucide-vue-next'
+import { Zap, Info, Check, Shield, Key, AlertTriangle, Copy, RefreshCw, Server } from 'lucide-vue-next'
 import api from '@/api'
 
 // OTLP settings
@@ -16,6 +16,13 @@ const securityStatus = ref<{ enabled: boolean; mode: string; message: string } |
 const generatedKey = ref('')
 const testingEncryption = ref(false)
 const testResult = ref<{ success: boolean; message: string } | null>(null)
+
+// Vault settings
+const showVaultConfig = ref(false)
+const vaultAddress = ref('http://localhost:30200')
+const vaultToken = ref('')
+const testingVault = ref(false)
+const vaultTestResult = ref<{ success: boolean; message: string } | null>(null)
 
 onMounted(async () => {
   await Promise.all([loadOtlpSettings(), loadSecurityStatus()])
@@ -54,6 +61,22 @@ async function testEncryption() {
 
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text)
+}
+
+async function testVaultConnection() {
+  testingVault.value = true
+  vaultTestResult.value = null
+  try {
+    const response = await api.post('/security/vault/test', {
+      address: vaultAddress.value,
+      token: vaultToken.value
+    })
+    vaultTestResult.value = response.data
+  } catch (e: any) {
+    vaultTestResult.value = { success: false, message: e.message }
+  } finally {
+    testingVault.value = false
+  }
 }
 
 async function loadOtlpSettings() {
@@ -166,6 +189,53 @@ async function saveOtlpSettings() {
             <Check v-if="testResult.success" class="h-4 w-4" />
             <AlertTriangle v-else class="h-4 w-4" />
             {{ testResult.message }}
+          </div>
+        </div>
+
+        <!-- Vault Configuration -->
+        <div class="border-t pt-4 mt-4">
+          <button @click="showVaultConfig = !showVaultConfig" class="flex items-center gap-2 text-blue-600 hover:text-blue-800">
+            <Server class="h-4 w-4" />
+            <span class="text-sm font-medium">{{ showVaultConfig ? 'Hide' : 'Configure' }} Vault Integration</span>
+          </button>
+          
+          <div v-if="showVaultConfig" class="mt-4 space-y-4 p-4 bg-gray-50 rounded-lg">
+            <p class="text-sm text-gray-600">Connect to an external HashiCorp Vault for secrets management.</p>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Vault Address</label>
+              <input v-model="vaultAddress" type="text" class="input" placeholder="http://localhost:30200" />
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Vault Token</label>
+              <input v-model="vaultToken" type="password" class="input" placeholder="hvs.xxxxx or root" />
+            </div>
+
+            <div class="flex items-center gap-3">
+              <button @click="testVaultConnection" :disabled="testingVault || !vaultAddress || !vaultToken" class="btn btn-primary flex items-center gap-2">
+                <RefreshCw :class="['h-4 w-4', testingVault && 'animate-spin']" />
+                Test Connection
+              </button>
+            </div>
+
+            <div v-if="vaultTestResult" :class="[
+              'p-3 rounded-lg flex items-center gap-2',
+              vaultTestResult.success ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'
+            ]">
+              <Check v-if="vaultTestResult.success" class="h-4 w-4" />
+              <AlertTriangle v-else class="h-4 w-4" />
+              {{ vaultTestResult.message }}
+            </div>
+
+            <div v-if="vaultTestResult?.success" class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p class="text-sm font-medium text-blue-800 mb-2">To enable Vault, set these environment variables:</p>
+              <pre class="bg-white p-2 rounded border text-xs font-mono overflow-x-auto">PESITWIZARD_SECURITY_MODE=VAULT
+PESITWIZARD_SECURITY_VAULT_ADDRESS={{ vaultAddress }}
+PESITWIZARD_SECURITY_VAULT_TOKEN={{ vaultToken }}
+PESITWIZARD_SECURITY_VAULT_PATH=secret/data/pesitwizard-client</pre>
+              <p class="text-xs text-blue-600 mt-2">Then restart the client application.</p>
+            </div>
           </div>
         </div>
       </div>

@@ -4,7 +4,7 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "Starting Vectis Client..."
+echo "Starting PeSIT Wizard Client..."
 
 # Kill existing processes
 pkill -f "spring-boot:run.*pesitwizard-client" 2>/dev/null
