@@ -34,11 +34,14 @@ class ConnectionValidatorTest {
     @Mock
     private ConfigService configService;
 
+    @Mock
+    private com.pesitwizard.security.SecretsService secretsService;
+
     private ConnectionValidator validator;
 
     @BeforeEach
     void setUp() {
-        validator = new ConnectionValidator(properties, configService);
+        validator = new ConnectionValidator(properties, configService, secretsService);
     }
 
     @Test

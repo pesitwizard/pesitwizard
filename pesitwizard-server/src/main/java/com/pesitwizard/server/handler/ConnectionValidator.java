@@ -8,6 +8,7 @@ import com.pesitwizard.fpdu.DiagnosticCode;
 import com.pesitwizard.fpdu.Fpdu;
 import com.pesitwizard.fpdu.ParameterIdentifier;
 import com.pesitwizard.fpdu.ParameterValue;
+import com.pesitwizard.security.SecretsService;
 import com.pesitwizard.server.config.PartnerConfig;
 import com.pesitwizard.server.config.PesitServerProperties;
 import com.pesitwizard.server.entity.Partner;
@@ -29,6 +30,7 @@ public class ConnectionValidator {
 
     private final PesitServerProperties properties;
     private final ConfigService configService;
+    private final SecretsService secretsService;
 
     /**
      * Validate partner on CONNECT
@@ -66,7 +68,12 @@ public class ConnectionValidator {
             ParameterValue pi5 = fpdu.getParameter(ParameterIdentifier.PI_05_CONTROLE_ACCES);
             String providedPassword = pi5 != null ? new String(pi5.getValue(), StandardCharsets.ISO_8859_1).trim() : "";
 
-            if (!partner.getPassword().equals(providedPassword)) {
+            // Decrypt stored password (may be encrypted with vault: or ENC: prefix)
+            String storedPassword = secretsService.decryptFromStorage(partner.getPassword());
+
+            if (!storedPassword.equals(providedPassword)) {
+                log.debug("[{}] Password mismatch for partner '{}' (provided length: {}, stored length: {})",
+                        ctx.getSessionId(), partnerId, providedPassword.length(), storedPassword.length());
                 return ValidationResult.error(DiagnosticCode.D3_304,
                         "Invalid password for partner '" + partnerId + "'");
             }

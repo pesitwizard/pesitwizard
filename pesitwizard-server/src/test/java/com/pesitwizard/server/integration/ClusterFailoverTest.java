@@ -263,7 +263,8 @@ public class ClusterFailoverTest {
         com.pesitwizard.server.service.FileSystemService fileSystemService = new com.pesitwizard.server.service.FileSystemService();
 
         // Create split handler components
-        ConnectionValidator connectionValidator = new ConnectionValidator(properties, configService);
+        com.pesitwizard.security.SecretsService secretsService = mock(com.pesitwizard.security.SecretsService.class);
+        ConnectionValidator connectionValidator = new ConnectionValidator(properties, configService, secretsService);
         FileValidator fileValidator = new FileValidator(properties, configService);
         TransferOperationHandler transferOperationHandler = new TransferOperationHandler(
                 properties, fileValidator, transferTracker, pathPlaceholderService, fileSystemService);
