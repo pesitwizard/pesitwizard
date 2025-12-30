@@ -206,6 +206,7 @@ class ConnectionValidatorTest {
         Partner partner = createPartner("PARTNER1", true);
         partner.setPassword("secret");
         when(configService.findPartner("PARTNER1")).thenReturn(Optional.of(partner));
+        when(secretsService.decryptFromStorage("secret")).thenReturn("secret");
 
         ValidationResult result = validator.validatePartner(ctx, fpdu);
 
@@ -227,6 +228,7 @@ class ConnectionValidatorTest {
         partner.setPassword("secret");
         partner.setAccessType(Partner.AccessType.BOTH);
         when(configService.findPartner("PARTNER1")).thenReturn(Optional.of(partner));
+        when(secretsService.decryptFromStorage("secret")).thenReturn("secret");
 
         ValidationResult result = validator.validatePartner(ctx, fpdu);
 
@@ -345,6 +347,7 @@ class ConnectionValidatorTest {
         Partner partner = createPartner("PARTNER1", true);
         partner.setPassword("secret");
         when(configService.findPartner("PARTNER1")).thenReturn(Optional.of(partner));
+        when(secretsService.decryptFromStorage("secret")).thenReturn("secret");
 
         ValidationResult result = validator.validatePartner(ctx, fpdu);
 
