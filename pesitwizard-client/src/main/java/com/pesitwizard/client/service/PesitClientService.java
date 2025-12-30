@@ -20,6 +20,7 @@ import com.pesitwizard.fpdu.ParameterGroupIdentifier;
 import com.pesitwizard.fpdu.ParameterValue;
 import com.pesitwizard.session.PesitSession;
 import com.pesitwizard.transport.TcpTransportChannel;
+import com.pesitwizard.transport.TlsTransportChannel;
 import com.pesitwizard.transport.TransportChannel;
 
 import lombok.RequiredArgsConstructor;
@@ -680,9 +681,16 @@ public class PesitClientService {
      * Create transport channel (plain or TLS)
      */
     private TransportChannel createChannel(String host, int port) {
-        TcpTransportChannel channel = new TcpTransportChannel(host, port);
-        channel.setReceiveTimeout(config.getReadTimeout());
-        return channel;
+        if (config.isTlsEnabled()) {
+            log.info("Creating TLS connection to {}:{}", host, port);
+            TlsTransportChannel channel = new TlsTransportChannel(host, port);
+            channel.setReceiveTimeout(config.getReadTimeout());
+            return channel;
+        } else {
+            TcpTransportChannel channel = new TcpTransportChannel(host, port);
+            channel.setReceiveTimeout(config.getReadTimeout());
+            return channel;
+        }
     }
 
     /**
