@@ -32,6 +32,7 @@ const error = ref('')
 const form = ref({
   server: '',
   partnerId: '',
+  password: '',
   direction: 'SEND' as 'SEND' | 'RECEIVE',
   sourceConnectionId: '' as string,  // '' = local filesystem
   destinationConnectionId: '' as string,  // '' = local filesystem
@@ -111,6 +112,7 @@ async function startTransfer() {
     const payload: Record<string, any> = {
       server: form.value.server,
       partnerId: form.value.partnerId,
+      password: form.value.password || undefined,
       filename: form.value.filename,
       remoteFilename: form.value.remoteFilename
     }
@@ -137,6 +139,7 @@ function resetForm() {
   result.value = null
   error.value = ''
   form.value.partnerId = ''
+  form.value.password = ''
   form.value.filename = ''
   form.value.remoteFilename = ''
   form.value.sourceConnectionId = ''
@@ -217,6 +220,20 @@ function formatBytes(bytes: number) {
             />
             <p class="text-xs text-gray-500 mt-1">
               Your client identifier (must be configured as a partner on the server)
+            </p>
+          </div>
+
+          <!-- Password -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input 
+              v-model="form.password" 
+              type="password" 
+              class="input" 
+              placeholder="Partner password (if required)"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+              Leave empty if the partner doesn't require authentication
             </p>
           </div>
 

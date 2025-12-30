@@ -480,11 +480,14 @@ public class TransferService {
                                 virtualFile, fileType, chunkSize, priority);
 
                 // CONNECT - use ConnectMessageBuilder for correct structure
-                Fpdu connectFpdu = new ConnectMessageBuilder()
+                ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
                                 .demandeur(request.getPartnerId())
                                 .serveur(server.getServerId())
-                                .writeAccess()
-                                .build(connectionId);
+                                .writeAccess();
+                if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+                        connectBuilder.password(request.getPassword());
+                }
+                Fpdu connectFpdu = connectBuilder.build(connectionId);
 
                 Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
                 int serverConnectionId = aconnect.getIdSrc();
@@ -584,11 +587,14 @@ public class TransferService {
                 String remoteFilename = request.getRemoteFilename();
 
                 // CONNECT with read access - use ConnectMessageBuilder
-                Fpdu connectFpdu = new ConnectMessageBuilder()
+                ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
                                 .demandeur(request.getPartnerId())
                                 .serveur(server.getServerId())
-                                .readAccess()
-                                .build(connectionId);
+                                .readAccess();
+                if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+                        connectBuilder.password(request.getPassword());
+                }
+                Fpdu connectFpdu = connectBuilder.build(connectionId);
 
                 Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
                 int serverConnectionId = aconnect.getIdSrc();
