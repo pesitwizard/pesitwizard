@@ -90,6 +90,16 @@ public class TransferHistory {
     /** OpenTelemetry span ID */
     private String spanId;
 
+    /** Sync points enabled for this transfer */
+    @Builder.Default
+    private Boolean syncPointsEnabled = false;
+
+    /** Last acknowledged sync point number */
+    private Integer lastSyncPoint;
+
+    /** Bytes transferred at last sync point (for resume) */
+    private Long bytesAtLastSyncPoint;
+
     private Instant startedAt;
     private Instant completedAt;
 

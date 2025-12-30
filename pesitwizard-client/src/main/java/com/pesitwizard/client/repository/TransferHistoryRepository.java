@@ -37,4 +37,15 @@ public interface TransferHistoryRepository extends JpaRepository<TransferHistory
     List<TransferHistory> findByCorrelationId(String correlationId);
 
     List<TransferHistory> findByTraceId(String traceId);
+
+    /**
+     * Find transfers that can be resumed (failed/cancelled with sync points).
+     */
+    @Query("SELECT h FROM TransferHistory h WHERE " +
+            "(h.status = 'FAILED' OR h.status = 'CANCELLED') " +
+            "AND h.syncPointsEnabled = true " +
+            "AND h.lastSyncPoint IS NOT NULL " +
+            "AND h.lastSyncPoint > 0 " +
+            "ORDER BY h.startedAt DESC")
+    Page<TransferHistory> findResumableTransfers(Pageable pageable);
 }

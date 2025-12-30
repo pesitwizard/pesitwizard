@@ -77,4 +77,25 @@ public class TransferRequest {
 
     /** Override priority (optional) */
     private Integer priority;
+
+    /** Enable sync points for restart capability (PI_07) */
+    private Boolean syncPointsEnabled;
+
+    /**
+     * Sync point interval in bytes. If null, auto-calculated based on file size:
+     * - Files < 1MB: no sync points
+     * - Files 1-10MB: every 256KB
+     * - Files 10-100MB: every 1MB
+     * - Files > 100MB: every 5MB
+     */
+    private Long syncPointIntervalBytes;
+
+    /** Enable resynchronization capability (PI_23) */
+    private Boolean resyncEnabled;
+
+    /**
+     * Resume from a previous interrupted transfer.
+     * If set, this is the transfer ID to resume from.
+     */
+    private String resumeFromTransferId;
 }

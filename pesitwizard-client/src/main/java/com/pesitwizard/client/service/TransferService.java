@@ -352,6 +352,79 @@ public class TransferService {
                                 });
         }
 
+        /**
+         * Cancel an in-progress transfer.
+         * Marks the transfer as CANCELLED and stores current progress for potential
+         * resume.
+         */
+        @Transactional
+        public Optional<TransferResponse> cancelTransfer(String transferId) {
+                return historyRepository.findById(transferId)
+                                .map(history -> {
+                                        if (history.getStatus() != TransferStatus.IN_PROGRESS) {
+                                                log.warn("Cannot cancel transfer {} - status is {}",
+                                                                transferId, history.getStatus());
+                                                return history;
+                                        }
+
+                                        log.info("Cancelling transfer {} at {} bytes",
+                                                        transferId, history.getBytesTransferred());
+
+                                        history.setStatus(TransferStatus.CANCELLED);
+                                        history.setErrorMessage("Transfer cancelled by user");
+                                        history.setCompletedAt(Instant.now());
+                                        return historyRepository.save(history);
+                                })
+                                .map(this::mapToResponse);
+        }
+
+        /**
+         * Resume a failed/cancelled transfer from the last sync point.
+         * Creates a new transfer that continues from where the original left off.
+         */
+        @Transactional
+        public Optional<TransferResponse> resumeTransfer(String transferId) {
+                return historyRepository.findById(transferId)
+                                .filter(h -> h.getStatus() == TransferStatus.FAILED
+                                                || h.getStatus() == TransferStatus.CANCELLED)
+                                .filter(h -> Boolean.TRUE.equals(h.getSyncPointsEnabled())
+                                                && h.getLastSyncPoint() != null
+                                                && h.getLastSyncPoint() > 0)
+                                .map(original -> {
+                                        log.info("Resuming transfer {} from sync point {} ({} bytes)",
+                                                        transferId, original.getLastSyncPoint(),
+                                                        original.getBytesAtLastSyncPoint());
+
+                                        // Create a new transfer request with resume info
+                                        TransferRequest request = TransferRequest.builder()
+                                                        .server(original.getServerId())
+                                                        .partnerId(original.getPartnerId())
+                                                        .filename(original.getLocalFilename())
+                                                        .remoteFilename(original.getRemoteFilename())
+                                                        .transferConfig(original.getTransferConfigId())
+                                                        .correlationId(original.getCorrelationId())
+                                                        .syncPointsEnabled(true)
+                                                        .resyncEnabled(true)
+                                                        .resumeFromTransferId(transferId)
+                                                        .build();
+
+                                        return switch (original.getDirection()) {
+                                                case SEND -> sendFile(request);
+                                                case RECEIVE -> receiveFile(request);
+                                                default -> throw new IllegalArgumentException(
+                                                                "Cannot resume MESSAGE transfers");
+                                        };
+                                });
+        }
+
+        /**
+         * Get transfers that can be resumed (failed/cancelled with sync points).
+         */
+        @Transactional(readOnly = true)
+        public Page<TransferHistory> getResumableTransfers(Pageable pageable) {
+                return historyRepository.findResumableTransfers(pageable);
+        }
+
         // ========== Private helper methods ==========
 
         private PesitServer resolveServer(String serverNameOrId) {
@@ -479,11 +552,21 @@ public class TransferService {
                 log.info("Transfer config: virtualFile={}, fileType={}, chunkSize={}, priority={}",
                                 virtualFile, fileType, chunkSize, priority);
 
+                // Determine sync point settings (request overrides config)
+                boolean syncPointsEnabled = request.getSyncPointsEnabled() != null
+                                ? request.getSyncPointsEnabled()
+                                : config.isSyncPointsEnabled();
+                boolean resyncEnabled = request.getResyncEnabled() != null
+                                ? request.getResyncEnabled()
+                                : config.isResyncEnabled();
+
                 // CONNECT - use ConnectMessageBuilder for correct structure
                 ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
                                 .demandeur(request.getPartnerId())
                                 .serveur(server.getServerId())
-                                .writeAccess();
+                                .writeAccess()
+                                .syncPointsEnabled(syncPointsEnabled)
+                                .resyncEnabled(resyncEnabled);
                 if (request.getPassword() != null && !request.getPassword().isEmpty()) {
                         connectBuilder.password(request.getPassword());
                 }
@@ -520,10 +603,10 @@ public class TransferService {
                 // DTF - send data in chunks using configured chunk size
                 // Send sync points periodically for restart capability
                 int offset = 0;
-                int chunkCount = 0;
+                long bytesSinceLastSync = 0;
                 int syncPointNumber = 0;
-                int syncPointInterval = config.getSyncPointInterval();
-                boolean syncPointsEnabled = config.isSyncPointsEnabled();
+                // Calculate sync point interval in bytes (auto or from request/config)
+                long syncIntervalBytes = calculateSyncPointInterval(request, config, data.length);
 
                 while (offset < data.length) {
                         int currentChunkSize = Math.min(chunkSize, data.length - offset);
@@ -534,17 +617,18 @@ public class TransferService {
                                         .withIdDst(serverConnectionId);
                         session.sendFpduWithData(dtfFpdu, chunk);
                         offset += currentChunkSize;
-                        chunkCount++;
+                        bytesSinceLastSync += currentChunkSize;
                         log.debug("Sent DTF chunk: {} bytes, total sent: {}/{}", currentChunkSize, offset, data.length);
 
                         // Send sync point periodically for restart capability
-                        if (syncPointsEnabled && chunkCount % syncPointInterval == 0) {
+                        if (syncPointsEnabled && syncIntervalBytes > 0 && bytesSinceLastSync >= syncIntervalBytes) {
                                 syncPointNumber++;
                                 Fpdu synFpdu = new Fpdu(FpduType.SYN)
                                                 .withIdDst(serverConnectionId)
                                                 .withParameter(new ParameterValue(PI_20_NUM_SYNC, syncPointNumber));
                                 session.sendFpduWithAck(synFpdu);
                                 log.info("Sync point {} acknowledged at {} bytes", syncPointNumber, offset);
+                                bytesSinceLastSync = 0;
                         }
                 }
 
@@ -586,11 +670,21 @@ public class TransferService {
                 int chunkSize = config.getChunkSize();
                 String remoteFilename = request.getRemoteFilename();
 
+                // Determine sync point settings (request overrides config)
+                boolean syncPointsEnabled = request.getSyncPointsEnabled() != null
+                                ? request.getSyncPointsEnabled()
+                                : config.isSyncPointsEnabled();
+                boolean resyncEnabled = request.getResyncEnabled() != null
+                                ? request.getResyncEnabled()
+                                : config.isResyncEnabled();
+
                 // CONNECT with read access - use ConnectMessageBuilder
                 ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
                                 .demandeur(request.getPartnerId())
                                 .serveur(server.getServerId())
-                                .readAccess();
+                                .readAccess()
+                                .syncPointsEnabled(syncPointsEnabled)
+                                .resyncEnabled(resyncEnabled);
                 if (request.getPassword() != null && !request.getPassword().isEmpty()) {
                         connectBuilder.password(request.getPassword());
                 }
@@ -774,6 +868,44 @@ public class TransferService {
                         return HexFormat.of().formatHex(digest.digest(data));
                 } catch (Exception e) {
                         return null;
+                }
+        }
+
+        /**
+         * Calculate sync point interval in bytes.
+         * If request specifies an interval, use it.
+         * Otherwise, auto-calculate based on file size:
+         * - Files < 1MB: no sync points (return 0)
+         * - Files 1-10MB: every 256KB
+         * - Files 10-100MB: every 1MB
+         * - Files > 100MB: every 5MB
+         */
+        private long calculateSyncPointInterval(TransferRequest request, TransferConfig config, int fileSize) {
+                // Request takes priority
+                if (request.getSyncPointIntervalBytes() != null && request.getSyncPointIntervalBytes() > 0) {
+                        return request.getSyncPointIntervalBytes();
+                }
+
+                // Check if sync points are enabled
+                boolean enabled = request.getSyncPointsEnabled() != null
+                                ? request.getSyncPointsEnabled()
+                                : config.isSyncPointsEnabled();
+                if (!enabled) {
+                        return 0;
+                }
+
+                // Auto-calculate based on file size
+                long KB = 1024;
+                long MB = 1024 * KB;
+
+                if (fileSize < MB) {
+                        return 0; // No sync points for small files
+                } else if (fileSize < 10 * MB) {
+                        return 256 * KB; // 256KB intervals
+                } else if (fileSize < 100 * MB) {
+                        return MB; // 1MB intervals
+                } else {
+                        return 5 * MB; // 5MB intervals
                 }
         }
 }

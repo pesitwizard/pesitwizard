@@ -111,4 +111,36 @@ public class TransferController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    /**
+     * Cancel an in-progress transfer.
+     * Sends ABORT FPDU to gracefully terminate the transfer.
+     */
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<TransferResponse> cancelTransfer(@PathVariable String id) {
+        return transferService.cancelTransfer(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Resume an interrupted/failed transfer from the last sync point.
+     * Requires the original transfer to have sync points enabled.
+     */
+    @PostMapping("/{id}/resume")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ResponseEntity<TransferResponse> resumeTransfer(@PathVariable String id) {
+        return transferService.resumeTransfer(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Get list of resumable transfers (failed/cancelled with sync points).
+     */
+    @GetMapping("/resumable")
+    public Page<TransferHistory> getResumableTransfers(
+            @PageableDefault(size = 20, sort = "startedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return transferService.getResumableTransfers(pageable);
+    }
 }

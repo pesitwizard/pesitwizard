@@ -9,7 +9,11 @@ import {
   XCircle,
   Loader2,
   Plug,
-  FolderOpen
+  FolderOpen,
+  ChevronDown,
+  RotateCcw,
+  StopCircle,
+  Play
 } from 'lucide-vue-next'
 import api from '@/api'
 import PathPlaceholderInput from '@/components/PathPlaceholderInput.vue'
@@ -37,8 +41,14 @@ const form = ref({
   sourceConnectionId: '' as string,  // '' = local filesystem
   destinationConnectionId: '' as string,  // '' = local filesystem
   filename: '',
-  remoteFilename: ''
+  remoteFilename: '',
+  // Advanced options
+  syncPointsEnabled: false,
+  syncPointIntervalBytes: null as number | null,  // null = auto
+  resyncEnabled: false
 })
+
+const showAdvancedOptions = ref(false)
 
 // File browser state
 const showFileBrowser = ref(false)
@@ -114,7 +124,11 @@ async function startTransfer() {
       partnerId: form.value.partnerId,
       password: form.value.password || undefined,
       filename: form.value.filename,
-      remoteFilename: form.value.remoteFilename
+      remoteFilename: form.value.remoteFilename,
+      // Advanced options
+      syncPointsEnabled: form.value.syncPointsEnabled || undefined,
+      syncPointIntervalBytes: form.value.syncPointIntervalBytes || undefined,
+      resyncEnabled: form.value.resyncEnabled || undefined
     }
     
     // Add connection IDs if selected
@@ -144,6 +158,10 @@ function resetForm() {
   form.value.remoteFilename = ''
   form.value.sourceConnectionId = ''
   form.value.destinationConnectionId = ''
+  form.value.syncPointsEnabled = false
+  form.value.syncPointIntervalBytes = null
+  form.value.resyncEnabled = false
+  showAdvancedOptions.value = false
 }
 
 function formatBytes(bytes: number) {
@@ -151,6 +169,34 @@ function formatBytes(bytes: number) {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+async function replayTransfer(transferId: string) {
+  transferring.value = true
+  error.value = ''
+  try {
+    const response = await api.post(`/transfers/${transferId}/replay`)
+    result.value = response.data
+  } catch (e: any) {
+    error.value = e.response?.data?.message || e.message || 'Replay failed'
+    console.error('Replay failed:', e)
+  } finally {
+    transferring.value = false
+  }
+}
+
+async function resumeTransfer(transferId: string) {
+  transferring.value = true
+  error.value = ''
+  try {
+    const response = await api.post(`/transfers/${transferId}/resume`)
+    result.value = response.data
+  } catch (e: any) {
+    error.value = e.response?.data?.message || e.message || 'Resume failed'
+    console.error('Resume failed:', e)
+  } finally {
+    transferring.value = false
+  }
 }
 </script>
 
@@ -334,6 +380,71 @@ function formatBytes(bytes: number) {
             </p>
           </div>
 
+          <!-- Advanced Options Toggle -->
+          <div class="border-t pt-4">
+            <button 
+              type="button"
+              @click="showAdvancedOptions = !showAdvancedOptions"
+              class="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+            >
+              <ChevronDown 
+                class="h-4 w-4 transition-transform" 
+                :class="{ 'rotate-180': showAdvancedOptions }"
+              />
+              Advanced Options
+            </button>
+            
+            <div v-if="showAdvancedOptions" class="mt-4 space-y-4 p-4 bg-gray-50 rounded-lg">
+              <!-- Sync Points -->
+              <div>
+                <label class="flex items-center gap-2">
+                  <input 
+                    v-model="form.syncPointsEnabled" 
+                    type="checkbox" 
+                    class="rounded border-gray-300 text-primary-600"
+                  />
+                  <span class="text-sm font-medium text-gray-700">Enable Sync Points</span>
+                </label>
+                <p class="text-xs text-gray-500 mt-1 ml-6">
+                  Create checkpoints during transfer for resume capability
+                </p>
+              </div>
+
+              <!-- Sync Point Interval -->
+              <div v-if="form.syncPointsEnabled" class="ml-6">
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Sync Point Interval
+                </label>
+                <select v-model="form.syncPointIntervalBytes" class="select">
+                  <option :value="null">Auto (based on file size)</option>
+                  <option :value="262144">256 KB</option>
+                  <option :value="524288">512 KB</option>
+                  <option :value="1048576">1 MB</option>
+                  <option :value="5242880">5 MB</option>
+                  <option :value="10485760">10 MB</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">
+                  Auto: &lt;1MB=none, 1-10MB=256KB, 10-100MB=1MB, &gt;100MB=5MB
+                </p>
+              </div>
+
+              <!-- Resync -->
+              <div v-if="form.syncPointsEnabled">
+                <label class="flex items-center gap-2">
+                  <input 
+                    v-model="form.resyncEnabled" 
+                    type="checkbox" 
+                    class="rounded border-gray-300 text-primary-600"
+                  />
+                  <span class="text-sm font-medium text-gray-700">Enable Resynchronization</span>
+                </label>
+                <p class="text-xs text-gray-500 mt-1 ml-6">
+                  Allow resuming from last checkpoint if transfer fails
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div v-if="error" class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
             {{ error }}
           </div>
@@ -408,9 +519,36 @@ function formatBytes(bytes: number) {
             {{ result.errorMessage }}
           </div>
 
-          <button @click="resetForm" class="btn btn-secondary w-full">
-            New Transfer
-          </button>
+          <!-- Action buttons -->
+          <div class="flex gap-2">
+            <button @click="resetForm" class="btn btn-secondary flex-1">
+              New Transfer
+            </button>
+            
+            <!-- Replay button for failed/cancelled transfers -->
+            <button 
+              v-if="result.status === 'FAILED' || result.status === 'CANCELLED'"
+              @click="replayTransfer(result.transferId)"
+              class="btn btn-primary flex items-center justify-center gap-2"
+              :disabled="transferring"
+              title="Replay transfer from start"
+            >
+              <RotateCcw class="h-4 w-4" />
+              Replay
+            </button>
+
+            <!-- Resume button for resumable transfers -->
+            <button 
+              v-if="(result.status === 'FAILED' || result.status === 'CANCELLED') && result.syncPointsEnabled && result.lastSyncPoint > 0"
+              @click="resumeTransfer(result.transferId)"
+              class="btn btn-success flex items-center justify-center gap-2"
+              :disabled="transferring"
+              title="Resume from last checkpoint"
+            >
+              <Play class="h-4 w-4" />
+              Resume
+            </button>
+          </div>
         </div>
       </div>
     </div>
