@@ -49,9 +49,13 @@ export default defineConfig({
           items: [
             { text: 'Installation', link: '/guide/server/installation' },
             { text: 'Configuration', link: '/guide/server/configuration' },
-            { text: 'Sécurité', link: '/guide/server/security' }
+            { text: 'Sécurité', link: '/guide/server/security' },
+            { text: 'Gestion des secrets', link: '/guide/server/secrets' },
+            { text: 'Connecteurs de stockage', link: '/guide/server/connectors' },
+            { text: 'Observabilité', link: '/guide/server/observability' }
           ]
-        }      ],
+        }
+      ],
       '/api/': [
         {
           text: 'API Reference',

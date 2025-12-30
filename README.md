@@ -19,9 +19,15 @@ PeSIT est le protocole standard utilisé par les banques françaises pour les é
 |--------|-------------|
 | `pesitwizard-server` | Serveur PeSIT complet avec API REST |
 | `pesitwizard-client` | Client Java pour envoyer/recevoir des fichiers |
-| `pesitwizard-client-ui` | Interface graphique pour le client |
+| `pesitwizard-client-ui` | Interface graphique pour le client (Vue.js) |
 | `pesitwizard-pesit` | Bibliothèque d'implémentation du protocole PeSIT |
-| `pesitwizard-docs` | Documentation |
+| `pesitwizard-security` | Gestion des secrets (AES, HashiCorp Vault) |
+| `pesitwizard-connector-api` | API pour les connecteurs de stockage |
+| `pesitwizard-connector-local` | Connecteur système de fichiers local |
+| `pesitwizard-connector-sftp` | Connecteur SFTP |
+| `pesitwizard-connector-s3` | Connecteur AWS S3 / MinIO |
+| `pesitwizard-helm-charts` | Charts Helm pour Kubernetes |
+| `pesitwizard-docs` | Documentation (VitePress) |
 
 ## Démarrage rapide
 
@@ -90,6 +96,95 @@ spring:
 | `PESITWIZARD_SERVER_PORT` | Port PeSIT | `5000` |
 | `SERVER_PORT` | Port API REST | `8080` |
 
+## Sécurité
+
+### Authentification OAuth2/OIDC
+
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://keycloak.example.com/realms/pesitwizard
+```
+
+### Gestion des secrets
+
+Deux modes disponibles via `pesitwizard-security` :
+
+**Mode AES (par défaut)** :
+```yaml
+pesitwizard:
+  secrets:
+    provider: aes
+    aes:
+      key-file: /app/secrets/master.key
+```
+
+**Mode HashiCorp Vault** :
+```yaml
+pesitwizard:
+  secrets:
+    provider: vault
+    vault:
+      address: https://vault.example.com
+      token: ${VAULT_TOKEN}
+      path: secret/data/pesitwizard
+```
+
+## Connecteurs de stockage
+
+Les connecteurs permettent de stocker les fichiers transférés sur différents backends :
+
+| Connecteur | Description | Configuration |
+|------------|-------------|---------------|
+| `local` | Système de fichiers local | `path: /data/files` |
+| `sftp` | Serveur SFTP distant | `host`, `port`, `username`, `password/key` |
+| `s3` | AWS S3 ou MinIO | `endpoint`, `bucket`, `access-key`, `secret-key` |
+
+```yaml
+pesitwizard:
+  connector:
+    type: sftp
+    sftp:
+      host: sftp.example.com
+      port: 22
+      username: pesit
+      private-key-file: /app/secrets/id_rsa
+```
+
+## Observabilité
+
+### Métriques Prometheus
+
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+```
+
+Endpoint : `http://localhost:8080/actuator/prometheus`
+
+### Tracing OpenTelemetry
+
+```yaml
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+otel:
+  exporter:
+    otlp:
+      endpoint: http://jaeger:4317
+```
+
 ## Docker
 
 ```bash
@@ -141,12 +236,18 @@ helm install pesitwizard-server ./pesitwizard-helm-charts/pesitwizard-server -n 
 
 ```
 pesitwizard/
-├── pesitwizard-server/       # Serveur PeSIT
-├── pesitwizard-client/       # Client Java
-├── pesitwizard-client-ui/    # Interface client (Vue.js)
-├── pesitwizard-pesit/        # Bibliothèque protocole
-├── pesitwizard-docs/         # Documentation (VitePress)
-└── scripts/             # Scripts utilitaires
+├── pesitwizard-server/          # Serveur PeSIT avec API REST
+├── pesitwizard-client/          # Client Java (CLI + API)
+├── pesitwizard-client-ui/       # Interface client (Vue.js)
+├── pesitwizard-pesit/           # Bibliothèque protocole PeSIT
+├── pesitwizard-security/        # Gestion secrets (AES, Vault)
+├── pesitwizard-connector-api/   # API connecteurs stockage
+├── pesitwizard-connector-local/ # Connecteur fichiers locaux
+├── pesitwizard-connector-sftp/  # Connecteur SFTP
+├── pesitwizard-connector-s3/    # Connecteur S3/MinIO
+├── pesitwizard-helm-charts/     # Charts Helm Kubernetes
+├── pesitwizard-docs/            # Documentation (VitePress)
+└── scripts/                     # Scripts utilitaires
 ```
 
 ## Contribuer

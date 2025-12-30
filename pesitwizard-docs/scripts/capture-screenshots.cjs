@@ -6,6 +6,13 @@ const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3002';
 const ADMIN_URL = process.env.ADMIN_URL || 'http://localhost:3000';
 const SCREENSHOT_DIR = path.join(__dirname, '../public/screenshots');
 
+// Screenshot options for consistent quality
+const SCREENSHOT_OPTIONS = {
+    fullPage: false,
+    animations: 'disabled',
+    scale: 'css'
+};
+
 async function ensureDir(dir) {
     if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -227,6 +234,26 @@ async function captureAdminScreenshots(page) {
         await page.waitForTimeout(1000);
         await page.screenshot({ path: path.join(adminDir, 'certificates.png'), fullPage: false });
         console.log('  ✓ certificates.png');
+
+        // Try to open certificate generation modal
+        const newCertBtn = page.locator('button:has-text("Generate"), button:has-text("Générer"), button:has-text("New")').first();
+        if (await newCertBtn.count() > 0) {
+            await newCertBtn.click();
+            await page.waitForTimeout(800);
+            await page.screenshot({ path: path.join(adminDir, 'certificate-form.png'), fullPage: false });
+            console.log('  ✓ certificate-form.png');
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(300);
+        }
+
+        // Settings/Configuration page if exists
+        await page.goto(`${ADMIN_URL}/clusters/${clusterId}/settings`);
+        await page.waitForTimeout(1000);
+        const settingsContent = page.locator('main, .content, [class*="settings"]');
+        if (await settingsContent.count() > 0) {
+            await page.screenshot({ path: path.join(adminDir, 'cluster-settings.png'), fullPage: false });
+            console.log('  ✓ cluster-settings.png');
+        }
     } else {
         console.log('  ⚠ No cluster found, skipping cluster-specific pages');
     }
