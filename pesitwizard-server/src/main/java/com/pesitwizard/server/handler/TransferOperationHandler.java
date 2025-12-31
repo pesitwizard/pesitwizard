@@ -158,7 +158,7 @@ public class TransferOperationHandler {
     /**
      * Handle OPEN (ORF) FPDU
      */
-    public Fpdu handleOpen(SessionContext ctx, Fpdu fpdu) {
+    public Fpdu handleOpen(SessionContext ctx, Fpdu fpdu) throws IOException {
         // Extract PI 21 (Compression)
         ParameterValue pi21 = fpdu.getParameter(ParameterIdentifier.PI_21_COMPRESSION);
         if (pi21 != null && pi21.getValue() != null && pi21.getValue().length > 0
@@ -166,7 +166,14 @@ public class TransferOperationHandler {
             ctx.getCurrentTransfer().setCompression(pi21.getValue()[0] & 0xFF);
         }
 
-        log.info("[{}] OPEN: file opened for transfer", ctx.getSessionId());
+        // Open output stream for streaming writes (write mode only)
+        TransferContext transfer = ctx.getCurrentTransfer();
+        if (transfer != null && transfer.isWriteMode() && transfer.getLocalPath() != null) {
+            transfer.openOutputStream();
+            log.info("[{}] OPEN: streaming output opened to {}", ctx.getSessionId(), transfer.getLocalPath());
+        } else {
+            log.info("[{}] OPEN: file opened for transfer", ctx.getSessionId());
+        }
 
         ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
 
@@ -177,7 +184,14 @@ public class TransferOperationHandler {
      * Handle CLOSE (CRF) FPDU
      */
     public Fpdu handleClose(SessionContext ctx, Fpdu fpdu) {
-        log.info("[{}] CLOSE: file closed", ctx.getSessionId());
+        // Close the output stream to flush data to disk
+        TransferContext transfer = ctx.getCurrentTransfer();
+        if (transfer != null) {
+            transfer.closeOutputStream();
+            log.info("[{}] CLOSE: file closed, {} bytes written", ctx.getSessionId(), transfer.getBytesTransferred());
+        } else {
+            log.info("[{}] CLOSE: file closed", ctx.getSessionId());
+        }
         ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
         return FpduResponseBuilder.buildAckClose(ctx);
     }

@@ -2,17 +2,22 @@ package com.pesitwizard.server.model;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 @DisplayName("TransferContext Tests")
 class TransferContextTest {
 
     private TransferContext context;
+
+    @TempDir
+    Path tempDir;
 
     @BeforeEach
     void setUp() {
@@ -21,9 +26,13 @@ class TransferContextTest {
 
     @Test
     @DisplayName("should append data and track bytes")
-    void shouldAppendDataAndTrackBytes() {
+    void shouldAppendDataAndTrackBytes() throws IOException {
         byte[] data1 = "Hello ".getBytes();
         byte[] data2 = "World!".getBytes();
+
+        // Setup streaming to temp file
+        context.setLocalPath(tempDir.resolve("test.dat"));
+        context.openOutputStream();
 
         context.appendData(data1);
         assertEquals(data1.length, context.getBytesTransferred());
@@ -32,13 +41,20 @@ class TransferContextTest {
         context.appendData(data2);
         assertEquals(data1.length + data2.length, context.getBytesTransferred());
         assertEquals(2, context.getRecordsTransferred());
+
+        context.closeOutputStream();
     }
 
     @Test
     @DisplayName("should get accumulated data")
-    void shouldGetAccumulatedData() {
+    void shouldGetAccumulatedData() throws IOException {
+        // Setup streaming to temp file
+        context.setLocalPath(tempDir.resolve("test2.dat"));
+        context.openOutputStream();
+
         context.appendData("Hello ".getBytes());
         context.appendData("World!".getBytes());
+        context.closeOutputStream();
 
         byte[] result = context.getData();
         assertEquals("Hello World!", new String(result));
@@ -46,15 +62,16 @@ class TransferContextTest {
 
     @Test
     @DisplayName("should reset all fields")
-    void shouldResetAllFields() {
+    void shouldResetAllFields() throws IOException {
         // Set some values
         context.setTransferId(123);
         context.setFilename("test.txt");
-        context.setLocalPath(Path.of("/tmp/test.txt"));
+        context.setLocalPath(tempDir.resolve("test3.dat"));
         context.setPriority(5);
         context.setWriteMode(true);
         context.setRestart(true);
         context.setStartTime(Instant.now());
+        context.openOutputStream();
         context.appendData("test data".getBytes());
 
         // Reset
@@ -70,7 +87,6 @@ class TransferContextTest {
         assertNull(context.getStartTime());
         assertEquals(0, context.getBytesTransferred());
         assertEquals(0, context.getRecordsTransferred());
-        assertEquals(0, context.getData().length);
     }
 
     @Test
@@ -117,10 +133,13 @@ class TransferContextTest {
 
     @Test
     @DisplayName("should handle empty data append")
-    void shouldHandleEmptyDataAppend() {
+    void shouldHandleEmptyDataAppend() throws IOException {
+        context.setLocalPath(tempDir.resolve("empty.dat"));
+        context.openOutputStream();
         context.appendData(new byte[0]);
         assertEquals(0, context.getBytesTransferred());
         assertEquals(1, context.getRecordsTransferred()); // Still counts as a record
+        context.closeOutputStream();
     }
 
     @Test

@@ -60,7 +60,7 @@ class TransferOperationHandlerTest {
 
     @Test
     @DisplayName("handleOpen should transition to transfer ready state")
-    void handleOpenShouldTransitionToTransferReady() {
+    void handleOpenShouldTransitionToTransferReady() throws java.io.IOException {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
         ctx.startTransfer();
@@ -76,7 +76,7 @@ class TransferOperationHandlerTest {
 
     @Test
     @DisplayName("handleOpen should extract compression from PI_21")
-    void handleOpenShouldExtractCompression() {
+    void handleOpenShouldExtractCompression() throws java.io.IOException {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
         TransferContext transfer = ctx.startTransfer();
@@ -158,7 +158,7 @@ class TransferOperationHandlerTest {
 
     @Test
     @DisplayName("handleOpen should handle missing transfer context")
-    void handleOpenShouldHandleMissingTransfer() {
+    void handleOpenShouldHandleMissingTransfer() throws java.io.IOException {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
         // No transfer started
@@ -173,7 +173,7 @@ class TransferOperationHandlerTest {
 
     @Test
     @DisplayName("handleOpen should handle PI_21 with value 0 (no compression)")
-    void handleOpenShouldHandleNoCompression() {
+    void handleOpenShouldHandleNoCompression() throws java.io.IOException {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
         TransferContext transfer = ctx.startTransfer();
@@ -258,7 +258,7 @@ class TransferOperationHandlerTest {
 
     @Test
     @DisplayName("handleOpen should return ACK_OPEN with restart point parameter")
-    void handleOpenShouldHandleRestartPoint() {
+    void handleOpenShouldHandleRestartPoint() throws java.io.IOException {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
         ctx.startTransfer();
@@ -274,7 +274,7 @@ class TransferOperationHandlerTest {
 
     @Test
     @DisplayName("handleOpen should handle null compression value gracefully")
-    void handleOpenShouldHandleNullCompressionValue() {
+    void handleOpenShouldHandleNullCompressionValue() throws java.io.IOException {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
         ctx.startTransfer();
@@ -290,7 +290,7 @@ class TransferOperationHandlerTest {
 
     @Test
     @DisplayName("handleOpen should handle empty compression array")
-    void handleOpenShouldHandleEmptyCompressionArray() {
+    void handleOpenShouldHandleEmptyCompressionArray() throws java.io.IOException {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.SF03_FILE_SELECTED);
         ctx.startTransfer();

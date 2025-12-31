@@ -88,9 +88,14 @@ public class PesitSessionHandler {
             if (data.length > 0) {
                 TransferContext transfer = ctx.getCurrentTransfer();
                 if (transfer != null) {
-                    transfer.appendData(data);
-                    log.info("[{}] DTF: received {} bytes, total: {} bytes",
-                            ctx.getSessionId(), data.length, transfer.getBytesTransferred());
+                    try {
+                        transfer.appendData(data);
+                        log.info("[{}] DTF: received {} bytes, total: {} bytes",
+                                ctx.getSessionId(), data.length, transfer.getBytesTransferred());
+                    } catch (java.io.IOException e) {
+                        log.error("[{}] DTF: error writing data: {}", ctx.getSessionId(), e.getMessage());
+                        throw new RuntimeException("Failed to write transfer data", e);
+                    }
                 }
             }
             return null; // No response for DTF
@@ -268,7 +273,7 @@ public class PesitSessionHandler {
     /**
      * SF03 - FILE SELECTED: Waiting for OPEN or DESELECT
      */
-    private Fpdu handleSF03(SessionContext ctx, Fpdu fpdu) {
+    private Fpdu handleSF03(SessionContext ctx, Fpdu fpdu) throws IOException {
         return switch (fpdu.getFpduType()) {
             case OPEN -> transferOperationHandler.handleOpen(ctx, fpdu);
             case DESELECT -> transferOperationHandler.handleDeselect(ctx, fpdu);

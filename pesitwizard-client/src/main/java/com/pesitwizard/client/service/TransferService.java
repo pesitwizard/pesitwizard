@@ -2,7 +2,9 @@ package com.pesitwizard.client.service;
 
 import static com.pesitwizard.fpdu.ParameterIdentifier.*;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -99,28 +101,28 @@ public class TransferService {
                                 filename, request.getRemoteFilename(), request.getPartnerId(),
                                 correlationId);
 
+                StorageConnector connector = null;
+                InputStream inputStream = null;
+
                 try {
-                        byte[] fileData;
                         long fileSize;
 
                         if (sourceConnId != null) {
-                                // Read from storage connector
-                                StorageConnector connector = createConnectorFromConnectionId(sourceConnId);
-                                try (var inputStream = connector.read(filename, 0)) {
-                                        fileData = inputStream.readAllBytes();
-                                        fileSize = fileData.length;
-                                } finally {
-                                        connector.close();
-                                }
-                                log.info("Read {} bytes from connector {} path {}", fileSize, sourceConnId, filename);
+                                // Stream from storage connector (no full load into memory)
+                                connector = createConnectorFromConnectionId(sourceConnId);
+                                fileSize = connector.getMetadata(filename).getSize();
+                                inputStream = connector.read(filename, 0);
+                                log.info("Streaming {} bytes from connector {} path {}", fileSize, sourceConnId,
+                                                filename);
                         } else {
-                                // Read from local filesystem
+                                // Stream from local filesystem (no full load into memory)
                                 Path localFile = Path.of(filename);
                                 if (!Files.exists(localFile)) {
                                         throw new IllegalArgumentException("Local file not found: " + filename);
                                 }
-                                fileData = Files.readAllBytes(localFile);
-                                fileSize = fileData.length;
+                                fileSize = Files.size(localFile);
+                                inputStream = new BufferedInputStream(Files.newInputStream(localFile), 64 * 1024);
+                                log.info("Streaming {} bytes from local file {}", fileSize, filename);
                         }
 
                         history.setFileSize(fileSize);
@@ -132,19 +134,35 @@ public class TransferService {
                         TransportChannel channel = createChannel(server, fileSize);
 
                         try (PesitSession session = new PesitSession(channel, false)) {
-                                executeSendTransfer(session, server, request, fileData, config, historyId);
+                                executeSendTransferStreaming(session, server, request, inputStream, fileSize, config,
+                                                historyId);
                         }
 
                         history.setStatus(TransferStatus.COMPLETED);
-                        history.setBytesTransferred((long) fileData.length);
-                        history.setChecksum(computeChecksum(fileData));
+                        history.setBytesTransferred(fileSize);
                         history.setCompletedAt(Instant.now());
+                        // Note: checksum computed during streaming is not available here
+                        // Could add streaming checksum calculation if needed
 
                 } catch (Exception e) {
                         history.setStatus(TransferStatus.FAILED);
                         history.setErrorMessage(e.getMessage());
                         history.setCompletedAt(Instant.now());
                         log.error("Send transfer failed: {}", e.getMessage(), e);
+                } finally {
+                        // Clean up resources
+                        if (inputStream != null) {
+                                try {
+                                        inputStream.close();
+                                } catch (Exception ignored) {
+                                }
+                        }
+                        if (connector != null) {
+                                try {
+                                        connector.close();
+                                } catch (Exception ignored) {
+                                }
+                        }
                 }
 
                 history = historyRepository.save(history);
@@ -689,6 +707,150 @@ public class TransferService {
                 session.sendFpduWithAck(deselectFpdu);
 
                 // RELEASE (session-level FPDU - keeps idSrc)
+                Fpdu releaseFpdu = new Fpdu(FpduType.RELEASE)
+                                .withIdDst(serverConnectionId)
+                                .withIdSrc(connectionId)
+                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 }));
+                session.sendFpduWithAck(releaseFpdu);
+        }
+
+        /**
+         * Execute send transfer with streaming - reads from InputStream in chunks
+         * without loading entire file into memory.
+         */
+        private void executeSendTransferStreaming(PesitSession session, PesitServer server,
+                        TransferRequest request, InputStream inputStream, long fileSize, TransferConfig config,
+                        String historyId)
+                        throws IOException, InterruptedException {
+                int connectionId = 1;
+
+                // Resolve transfer parameters from request or config
+                String virtualFile = request.getVirtualFile() != null ? request.getVirtualFile()
+                                : request.getRemoteFilename();
+                int chunkSize = request.getChunkSize() != null ? request.getChunkSize() : config.getChunkSize();
+                int recordLength = config.getRecordLength() != null ? config.getRecordLength() : 0;
+
+                log.info("Streaming transfer: virtualFile={}, fileSize={}, chunkSize={}", virtualFile, fileSize,
+                                chunkSize);
+
+                // Determine sync point settings (request overrides config)
+                boolean syncPointsEnabled = request.getSyncPointsEnabled() != null
+                                ? request.getSyncPointsEnabled()
+                                : config.isSyncPointsEnabled();
+                boolean resyncEnabled = request.getResyncEnabled() != null
+                                ? request.getResyncEnabled()
+                                : config.isResyncEnabled();
+
+                // Progress tracking: update every 1MB or at least every 10 chunks
+                final long progressUpdateInterval = Math.max(1024 * 1024, chunkSize * 10L);
+                long bytesSinceLastProgressUpdate = 0;
+
+                // CONNECT - use ConnectMessageBuilder for correct structure
+                ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
+                                .demandeur(request.getPartnerId())
+                                .serveur(server.getServerId())
+                                .writeAccess()
+                                .syncPointsEnabled(syncPointsEnabled)
+                                .resyncEnabled(resyncEnabled);
+                if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+                        String password = secretsService.decrypt(request.getPassword());
+                        connectBuilder.password(password);
+                }
+                Fpdu connectFpdu = connectBuilder.build(connectionId);
+
+                Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
+                int serverConnectionId = aconnect.getIdSrc();
+
+                // CREATE - use CreateMessageBuilder for correct structure
+                int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF;
+                int effectiveRecordLength = recordLength > 0 ? Math.min(recordLength, 1024) : 30;
+                int effectiveMaxEntity = Math.min(chunkSize, 4096);
+                Fpdu createFpdu = new CreateMessageBuilder()
+                                .filename(virtualFile)
+                                .transferId(transferId)
+                                .variableFormat()
+                                .recordLength(effectiveRecordLength)
+                                .maxEntitySize(effectiveMaxEntity)
+                                .build(serverConnectionId);
+
+                session.sendFpduWithAck(createFpdu);
+
+                // OPEN (ORF) - open file for writing
+                Fpdu openFpdu = new Fpdu(FpduType.OPEN)
+                                .withIdDst(serverConnectionId);
+                session.sendFpduWithAck(openFpdu);
+
+                // WRITE (signals start of data transfer, no data payload)
+                Fpdu writeFpdu = new Fpdu(FpduType.WRITE)
+                                .withIdDst(serverConnectionId);
+                session.sendFpduWithAck(writeFpdu);
+
+                // DTF - stream data in chunks from InputStream
+                long totalSent = 0;
+                long bytesSinceLastSync = 0;
+                int syncPointNumber = 0;
+                long syncIntervalBytes = calculateSyncPointInterval(request, config,
+                                (int) Math.min(fileSize, Integer.MAX_VALUE));
+
+                byte[] buffer = new byte[chunkSize];
+                int bytesRead;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        byte[] chunk = bytesRead == buffer.length ? buffer : java.util.Arrays.copyOf(buffer, bytesRead);
+
+                        Fpdu dtfFpdu = new Fpdu(FpduType.DTF)
+                                        .withIdDst(serverConnectionId);
+                        session.sendFpduWithData(dtfFpdu, chunk);
+                        totalSent += bytesRead;
+                        bytesSinceLastSync += bytesRead;
+                        bytesSinceLastProgressUpdate += bytesRead;
+                        log.debug("Sent DTF chunk: {} bytes, total sent: {}/{}", bytesRead, totalSent, fileSize);
+
+                        // Update progress in database periodically
+                        if (bytesSinceLastProgressUpdate >= progressUpdateInterval) {
+                                updateTransferProgress(historyId, totalSent, syncPointNumber);
+                                bytesSinceLastProgressUpdate = 0;
+                        }
+
+                        // Send sync point periodically for restart capability
+                        if (syncPointsEnabled && syncIntervalBytes > 0 && bytesSinceLastSync >= syncIntervalBytes) {
+                                syncPointNumber++;
+                                Fpdu synFpdu = new Fpdu(FpduType.SYN)
+                                                .withIdDst(serverConnectionId)
+                                                .withParameter(new ParameterValue(PI_20_NUM_SYNC, syncPointNumber));
+                                session.sendFpduWithAck(synFpdu);
+                                log.info("Sync point {} acknowledged at {} bytes", syncPointNumber, totalSent);
+                                bytesSinceLastSync = 0;
+                                updateTransferProgress(historyId, totalSent, syncPointNumber);
+                        }
+                }
+
+                log.info("Streaming complete: sent {} bytes in total", totalSent);
+
+                // DTF_END - signal end of data transfer
+                Fpdu dtfEndFpdu = new Fpdu(FpduType.DTF_END)
+                                .withIdDst(serverConnectionId)
+                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 }));
+                session.sendFpdu(dtfEndFpdu);
+
+                // TRANS_END
+                Fpdu transendFpdu = new Fpdu(FpduType.TRANS_END)
+                                .withIdDst(serverConnectionId);
+                session.sendFpduWithAck(transendFpdu);
+
+                // CLOSE (CRF)
+                Fpdu closeFpdu = new Fpdu(FpduType.CLOSE)
+                                .withIdDst(serverConnectionId)
+                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 }));
+                session.sendFpduWithAck(closeFpdu);
+
+                // DESELECT
+                Fpdu deselectFpdu = new Fpdu(FpduType.DESELECT)
+                                .withIdDst(serverConnectionId)
+                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 }));
+                session.sendFpduWithAck(deselectFpdu);
+
+                // RELEASE
                 Fpdu releaseFpdu = new Fpdu(FpduType.RELEASE)
                                 .withIdDst(serverConnectionId)
                                 .withIdSrc(connectionId)

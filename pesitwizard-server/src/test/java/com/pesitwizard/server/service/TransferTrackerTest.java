@@ -148,8 +148,8 @@ class TransferTrackerTest {
         void shouldTrackCompletionWithTransferContext() {
             sessionContext.setTransferRecordId("transfer-123");
             TransferContext transferContext = new TransferContext();
-            // appendData adds to bytesTransferred, so after append it will be 4
-            transferContext.appendData(new byte[] { 1, 2, 3, 4 });
+            // Set bytes transferred directly since appendData now requires streaming setup
+            transferContext.setBytesTransferred(4L);
             sessionContext.setCurrentTransfer(transferContext);
 
             transferTracker.trackTransferComplete(sessionContext);
