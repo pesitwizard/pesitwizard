@@ -76,6 +76,7 @@ public class TransferService {
         private final StorageConnectionRepository connectionRepository;
         private final ObjectMapper objectMapper;
         private final SecretsService secretsService;
+        private final TransferProgressService progressService;
 
         public TransferResponse sendFile(TransferRequest request) {
                 String correlationId = request.getCorrelationId() != null ? request.getCorrelationId()
@@ -663,7 +664,7 @@ public class TransferService {
 
                         // Update progress in database periodically
                         if (bytesSinceLastProgressUpdate >= progressUpdateInterval) {
-                                updateTransferProgress(historyId, offset, syncPointNumber);
+                                updateTransferProgress(historyId, offset, data.length, syncPointNumber);
                                 bytesSinceLastProgressUpdate = 0;
                         }
 
@@ -677,7 +678,7 @@ public class TransferService {
                                 log.info("Sync point {} acknowledged at {} bytes", syncPointNumber, offset);
                                 bytesSinceLastSync = 0;
                                 // Also update progress after sync point
-                                updateTransferProgress(historyId, offset, syncPointNumber);
+                                updateTransferProgress(historyId, offset, data.length, syncPointNumber);
                         }
                 }
 
@@ -806,7 +807,7 @@ public class TransferService {
 
                         // Update progress in database periodically
                         if (bytesSinceLastProgressUpdate >= progressUpdateInterval) {
-                                updateTransferProgress(historyId, totalSent, syncPointNumber);
+                                updateTransferProgress(historyId, totalSent, fileSize, syncPointNumber);
                                 bytesSinceLastProgressUpdate = 0;
                         }
 
@@ -819,7 +820,7 @@ public class TransferService {
                                 session.sendFpduWithAck(synFpdu);
                                 log.info("Sync point {} acknowledged at {} bytes", syncPointNumber, totalSent);
                                 bytesSinceLastSync = 0;
-                                updateTransferProgress(historyId, totalSent, syncPointNumber);
+                                updateTransferProgress(historyId, totalSent, fileSize, syncPointNumber);
                         }
                 }
 
@@ -1069,12 +1070,16 @@ public class TransferService {
         }
 
         /**
-         * Update transfer progress in database.
-         * Uses saveAndFlush to ensure progress is visible immediately for polling.
+         * Update transfer progress in database and send WebSocket notification.
          */
-        public void updateTransferProgress(String historyId, long bytesTransferred, int lastSyncPoint) {
+        public void updateTransferProgress(String historyId, long bytesTransferred, long fileSize, int lastSyncPoint) {
                 if (historyId == null)
                         return;
+
+                // Send WebSocket update immediately (doesn't need DB)
+                progressService.sendProgress(historyId, bytesTransferred, fileSize, lastSyncPoint);
+
+                // Also update database for persistence
                 historyRepository.findById(historyId).ifPresent(history -> {
                         history.setBytesTransferred(bytesTransferred);
                         if (lastSyncPoint > 0) {
@@ -1082,7 +1087,6 @@ public class TransferService {
                                 history.setBytesAtLastSyncPoint(bytesTransferred);
                         }
                         historyRepository.saveAndFlush(history);
-                        log.info("Progress update: {} bytes transferred", bytesTransferred);
                 });
         }
 

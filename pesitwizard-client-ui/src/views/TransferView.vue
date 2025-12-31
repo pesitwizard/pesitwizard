@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted } from 'vue'
 import { 
   Upload, 
   Download,
@@ -19,6 +19,7 @@ import {
 import api from '@/api'
 import PathPlaceholderInput from '@/components/PathPlaceholderInput.vue'
 import FileBrowser from '@/components/FileBrowser.vue'
+import { useTransferProgress } from '@/composables/useTransferProgress'
 
 interface StorageConnection {
   id: string
@@ -36,7 +37,39 @@ const error = ref('')
 const currentTransferId = ref<string | null>(null)
 const progress = ref({ bytesTransferred: 0, fileSize: 0, percentage: 0 })
 const resumableTransfers = ref<any[]>([])
-let progressInterval: ReturnType<typeof setInterval> | null = null
+
+// WebSocket for real-time progress updates
+const { 
+  progress: wsProgress, 
+  connected: wsConnected,
+  connect: wsConnect,
+  subscribeToTransfer,
+  unsubscribe: wsUnsubscribe,
+  disconnect: wsDisconnect,
+  reset: wsReset
+} = useTransferProgress()
+
+// Watch WebSocket progress and update local progress
+watch(wsProgress, (newProgress) => {
+  if (newProgress) {
+    progress.value = {
+      bytesTransferred: newProgress.bytesTransferred,
+      fileSize: newProgress.fileSize,
+      percentage: newProgress.percentage
+    }
+    // Check if transfer is complete
+    if (newProgress.status === 'COMPLETED' || newProgress.status === 'FAILED') {
+      wsUnsubscribe()
+      // Fetch final result from API
+      if (currentTransferId.value) {
+        api.get(`/transfers/${currentTransferId.value}`).then(response => {
+          result.value = response.data
+          transferring.value = false
+        }).catch(console.error)
+      }
+    }
+  }
+})
 
 const form = ref({
   server: '',
@@ -85,38 +118,20 @@ async function loadResumableTransfers() {
   }
 }
 
-function startProgressPolling(transferId: string) {
-  progressInterval = setInterval(async () => {
-    try {
-      const response = await api.get(`/transfers/${transferId}`)
-      const transfer = response.data
-      if (transfer) {
-        progress.value = {
-          bytesTransferred: transfer.bytesTransferred || 0,
-          fileSize: transfer.fileSize || 0,
-          percentage: transfer.fileSize > 0 
-            ? Math.round((transfer.bytesTransferred / transfer.fileSize) * 100) 
-            : 0
-        }
-        // Stop polling if transfer is complete
-        if (transfer.status !== 'IN_PROGRESS') {
-          stopProgressPolling()
-          result.value = transfer
-          transferring.value = false
-        }
-      }
-    } catch (e) {
-      console.error('Failed to poll progress:', e)
-    }
-  }, 1000)
+function startProgressTracking(transferId: string) {
+  // Connect to WebSocket and subscribe to transfer progress
+  wsReset()
+  subscribeToTransfer(transferId)
 }
 
-function stopProgressPolling() {
-  if (progressInterval) {
-    clearInterval(progressInterval)
-    progressInterval = null
-  }
+function stopProgressTracking() {
+  wsUnsubscribe()
 }
+
+// Cleanup on unmount
+onUnmounted(() => {
+  wsDisconnect()
+})
 
 async function cancelCurrentTransfer() {
   if (!currentTransferId.value) return
@@ -124,7 +139,7 @@ async function cancelCurrentTransfer() {
   try {
     const response = await api.post(`/transfers/${currentTransferId.value}/cancel`)
     result.value = response.data
-    stopProgressPolling()
+    stopProgressTracking()
     transferring.value = false
     await loadResumableTransfers() // Refresh resumable list
   } catch (e: any) {
@@ -209,7 +224,7 @@ async function startTransfer() {
     // Start progress polling if transfer is in progress
     if (response.data?.transferId && response.data?.status === 'IN_PROGRESS') {
       currentTransferId.value = response.data.transferId
-      startProgressPolling(response.data.transferId)
+      startProgressTracking(response.data.transferId)
     } else {
       transferring.value = false
     }
