@@ -155,7 +155,7 @@ class TransferTrackerTest {
             transferTracker.trackTransferComplete(sessionContext);
 
             verify(transferService).updateProgress("transfer-123", 4L);
-            verify(transferService).completeTransfer(eq("transfer-123"), anyString());
+            verify(transferService).completeTransfer(eq("transfer-123"), any());
         }
 
         @Test

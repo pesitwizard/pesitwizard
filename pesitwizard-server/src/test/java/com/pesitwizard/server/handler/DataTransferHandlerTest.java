@@ -419,9 +419,9 @@ class DataTransferHandlerTest {
             ctx.transitionTo(ServerState.TDE07_WRITE_END);
             TransferContext transfer = ctx.startTransfer();
             transfer.setLocalPath(tempFile);
-            transfer.setBytesTransferred(100);
-            transfer.setRecordsTransferred(5);
+            transfer.openOutputStream();
             transfer.appendData("Test data".getBytes());
+            transfer.closeOutputStream();
 
             Fpdu fpdu = new Fpdu(FpduType.TRANS_END);
 
