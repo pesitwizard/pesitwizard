@@ -125,12 +125,14 @@ public class TransferService {
 
                         history.setFileSize(fileSize);
                         history.setStatus(TransferStatus.IN_PROGRESS);
+                        history.setBytesTransferred(0L);
                         history = historyRepository.save(history);
+                        final String historyId = history.getId();
 
-                        TransportChannel channel = createChannel(server);
+                        TransportChannel channel = createChannel(server, fileSize);
 
                         try (PesitSession session = new PesitSession(channel, false)) {
-                                executeSendTransfer(session, server, request, fileData, config);
+                                executeSendTransfer(session, server, request, fileData, config, historyId);
                         }
 
                         history.setStatus(TransferStatus.COMPLETED);
@@ -456,6 +458,21 @@ public class TransferService {
         }
 
         private TransportChannel createChannel(PesitServer server) {
+                return createChannel(server, 0);
+        }
+
+        private TransportChannel createChannel(PesitServer server, long fileSize) {
+                // Calculate timeout based on file size: min 60s, add 1 minute per 50MB
+                int baseTimeout = server.getReadTimeout() != null ? server.getReadTimeout() : 60000;
+                int fileSizeTimeout = (int) ((fileSize / (50 * 1024 * 1024)) * 60000);
+                int timeout = Math.max(baseTimeout, baseTimeout + fileSizeTimeout);
+                // Cap at 30 minutes max
+                timeout = Math.min(timeout, 30 * 60 * 1000);
+
+                if (fileSize > 0) {
+                        log.info("Using timeout of {}ms for file size {} bytes", timeout, fileSize);
+                }
+
                 if (server.isTlsEnabled()) {
                         TlsTransportChannel tlsChannel;
                         if (server.getTruststoreData() != null && server.getTruststoreData().length > 0) {
@@ -469,11 +486,11 @@ public class TransferService {
                         } else {
                                 tlsChannel = new TlsTransportChannel(server.getHost(), server.getPort());
                         }
-                        tlsChannel.setReceiveTimeout(server.getReadTimeout());
+                        tlsChannel.setReceiveTimeout(timeout);
                         return tlsChannel;
                 }
                 TcpTransportChannel channel = new TcpTransportChannel(server.getHost(), server.getPort());
-                channel.setReceiveTimeout(server.getReadTimeout());
+                channel.setReceiveTimeout(timeout);
                 return channel;
         }
 
@@ -537,7 +554,7 @@ public class TransferService {
         }
 
         private void executeSendTransfer(PesitSession session, PesitServer server,
-                        TransferRequest request, byte[] data, TransferConfig config)
+                        TransferRequest request, byte[] data, TransferConfig config, String historyId)
                         throws IOException, InterruptedException {
                 int connectionId = 1;
 
@@ -559,6 +576,10 @@ public class TransferService {
                 boolean resyncEnabled = request.getResyncEnabled() != null
                                 ? request.getResyncEnabled()
                                 : config.isResyncEnabled();
+
+                // Progress tracking: update every 1MB or at least every 10 chunks
+                final long progressUpdateInterval = Math.max(1024 * 1024, chunkSize * 10L);
+                long bytesSinceLastProgressUpdate = 0;
 
                 // CONNECT - use ConnectMessageBuilder for correct structure
                 ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
@@ -621,7 +642,14 @@ public class TransferService {
                         session.sendFpduWithData(dtfFpdu, chunk);
                         offset += currentChunkSize;
                         bytesSinceLastSync += currentChunkSize;
+                        bytesSinceLastProgressUpdate += currentChunkSize;
                         log.debug("Sent DTF chunk: {} bytes, total sent: {}/{}", currentChunkSize, offset, data.length);
+
+                        // Update progress in database periodically
+                        if (bytesSinceLastProgressUpdate >= progressUpdateInterval) {
+                                updateTransferProgress(historyId, offset, syncPointNumber);
+                                bytesSinceLastProgressUpdate = 0;
+                        }
 
                         // Send sync point periodically for restart capability
                         if (syncPointsEnabled && syncIntervalBytes > 0 && bytesSinceLastSync >= syncIntervalBytes) {
@@ -632,6 +660,8 @@ public class TransferService {
                                 session.sendFpduWithAck(synFpdu);
                                 log.info("Sync point {} acknowledged at {} bytes", syncPointNumber, offset);
                                 bytesSinceLastSync = 0;
+                                // Also update progress after sync point
+                                updateTransferProgress(historyId, offset, syncPointNumber);
                         }
                 }
 
@@ -843,7 +873,8 @@ public class TransferService {
                                 .partnerId(partnerId)
                                 .remoteFilename(filename)
                                 .build();
-                executeSendTransfer(session, server, request, data, config);
+                // No progress tracking for small messages
+                executeSendTransfer(session, server, request, data, config, null);
         }
 
         private TransferResponse mapToResponse(TransferHistory history) {
@@ -875,6 +906,25 @@ public class TransferService {
                 } catch (Exception e) {
                         return null;
                 }
+        }
+
+        /**
+         * Update transfer progress in database.
+         * Uses a separate transaction to ensure progress is visible immediately.
+         */
+        @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+        public void updateTransferProgress(String historyId, long bytesTransferred, int lastSyncPoint) {
+                if (historyId == null)
+                        return;
+                historyRepository.findById(historyId).ifPresent(history -> {
+                        history.setBytesTransferred(bytesTransferred);
+                        if (lastSyncPoint > 0) {
+                                history.setLastSyncPoint(lastSyncPoint);
+                                history.setBytesAtLastSyncPoint(bytesTransferred);
+                        }
+                        historyRepository.save(history);
+                        log.debug("Progress update: {} bytes, sync point {}", bytesTransferred, lastSyncPoint);
+                });
         }
 
         /**
