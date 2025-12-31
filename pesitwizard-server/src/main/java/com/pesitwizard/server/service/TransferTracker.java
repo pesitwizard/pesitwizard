@@ -96,20 +96,18 @@ public class TransferTracker {
         }
 
         try {
-            // Calculate checksum and get bytes transferred from transfer context
+            // Get bytes transferred from transfer context
+            // Note: With streaming, data is written directly to disk, so we don't load it
+            // into memory
             String checksum = null;
             long bytesTransferred = 0;
             TransferContext transfer = ctx.getCurrentTransfer();
             if (transfer != null) {
                 bytesTransferred = transfer.getBytesTransferred();
-                byte[] data = transfer.getData();
-                if (data != null && data.length > 0) {
-                    // Use actual data length if available (for RECEIVE)
-                    if (bytesTransferred == 0) {
-                        bytesTransferred = data.length;
-                    }
-                    checksum = calculateChecksum(data);
-                }
+                // For streaming transfers, checksum would need to be calculated during transfer
+                // or by reading the file in chunks. For now, we skip checksum for large
+                // transfers.
+                // TODO: Implement streaming checksum calculation if needed
             }
 
             // Update final bytes transferred before completing
