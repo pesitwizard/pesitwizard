@@ -666,9 +666,9 @@ public class TransferService {
 
                 // CREATE - use CreateMessageBuilder for correct structure
                 int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF; // PI_13 is 3 bytes max
-                // Record length must be >= chunk size to avoid "article length exceeded" errors
-                // For variable format, this is the maximum article size
-                int effectiveRecordLength = recordLength > 0 ? recordLength : chunkSize;
+                // For variable format, PI 32 (record length) = max article size we'll send
+                // Must be >= negotiated PI 25, so use chunkSize (our PI 25 request)
+                int effectiveRecordLength = chunkSize;
                 int effectiveMaxEntity = chunkSize;
                 log.info("CREATE params (non-streaming): recordLength={}, chunkSize={}, effectiveRecordLength={}, effectiveMaxEntity={}, syncPointsEnabled={}",
                                 recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
@@ -857,8 +857,10 @@ public class TransferService {
 
                 // CREATE - use CreateMessageBuilder for correct structure
                 int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF;
-                // Record length must be >= chunk size to avoid "article length exceeded" errors
-                int effectiveRecordLength = recordLength > 0 ? recordLength : chunkSize;
+                // For variable format, record length (PI 32) = max article size we'll send
+                // This MUST be >= actual chunk size used after negotiation
+                // Use chunkSize as the record length (server may negotiate down via PI 25)
+                int effectiveRecordLength = chunkSize;
                 int effectiveMaxEntity = chunkSize;
                 log.info("CREATE params: recordLength={}, chunkSize={}, effectiveRecordLength={}, effectiveMaxEntity={}, syncPointsEnabled={}",
                                 recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
