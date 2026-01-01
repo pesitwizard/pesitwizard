@@ -10,11 +10,7 @@ import picocli.CommandLine.Option;
  */
 @Component
 @Command(name = "pesit-client", mixinStandardHelpOptions = true, version = "1.0.0", description = "PeSIT file transfer client", subcommands = {
-        SendCommand.class,
-        ReceiveCommand.class,
-        MessageCommand.class,
         ListCommand.class,
-        TestCommand.class,
         ServeCommand.class
 })
 public class PesitClientCommand implements Runnable {
