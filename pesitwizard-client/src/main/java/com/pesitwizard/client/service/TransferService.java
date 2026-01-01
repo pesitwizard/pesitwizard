@@ -479,8 +479,7 @@ public class TransferService {
          * - Small files (< 1MB): 4KB chunks
          * - Medium files (1MB - 10MB): 16KB chunks
          * - Large files (10MB - 100MB): 32KB chunks
-         * - Very large files (> 100MB): 64KB chunks
-         * Maximum is capped at 64KB for PeSIT compatibility.
+         * - Very large files (> 100MB): 65535 bytes (max for PI 25 which is 2 bytes)
          */
         private int calculateOptimalChunkSize(long fileSize) {
                 if (fileSize < 1024 * 1024) { // < 1MB
@@ -490,7 +489,7 @@ public class TransferService {
                 } else if (fileSize < 100 * 1024 * 1024) { // < 100MB
                         return 32768; // 32KB
                 } else {
-                        return 65536; // 64KB max
+                        return 65535; // Max for PI 25 (2 bytes)
                 }
         }
 
