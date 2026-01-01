@@ -45,7 +45,6 @@ public class ParameterBuilder {
 
     /**
      * Set value as integer (for fixed-length numeric PIs)
-     * Always uses the full defined PI length with leading zero padding.
      */
     public ParameterBuilder value(int value) {
         if (!(pi instanceof ParameterIdentifier pi)) {
@@ -55,14 +54,21 @@ public class ParameterBuilder {
         if (length == -1) {
             throw new IllegalArgumentException("Cannot use integer value for variable-length PI: " + pi.getName());
         }
-
-        // Check if value fits in the defined length
-        long maxValue = (1L << (length * 8)) - 1;
-        if (value > maxValue) {
+        if (value < 256) {
+            length = 1; // Use 1 byte for small integers
+        } else if (value < 65536) {
+            length = 2; // Use 2 bytes for larger integers
+        } else if (value < 16777216) {
+            length = 3; // Use 3 bytes for even larger integers
+        } else if (value < 4294967296L) {
+            length = 4; // Use 4 bytes for very large integers
+        } else {
+            throw new IllegalArgumentException("Integer value too large for PI: " + pi.getName());
+        }
+        if (length > pi.getLength()) {
             throw new IllegalArgumentException("Integer value exceeds PI length: " + pi.getName());
         }
 
-        // Always use full defined length with leading zero padding
         byte[] bytes = new byte[length];
         for (int i = 0; i < length; i++) {
             bytes[length - 1 - i] = (byte) (value >> (i * 8));
@@ -73,7 +79,6 @@ public class ParameterBuilder {
 
     /**
      * Set value as long (for 8-byte PIs like file size)
-     * Always uses the full defined PI length with leading zero padding.
      */
     public ParameterBuilder value(long value) {
         if (!(pi instanceof ParameterIdentifier pi)) {
@@ -84,16 +89,21 @@ public class ParameterBuilder {
         if (length == -1) {
             throw new IllegalArgumentException("Cannot use long value for variable-length PI: " + pi.getName());
         }
-
-        // Check if value fits in the defined length (handle overflow for 8-byte)
-        if (length < 8) {
-            long maxValue = (1L << (length * 8)) - 1;
-            if (value > maxValue) {
-                throw new IllegalArgumentException("Long value exceeds PI length: " + pi.getName());
-            }
+        if (value < 256) {
+            length = 1; // Use 1 byte for small integers
+        } else if (value < 65536) {
+            length = 2; // Use 2 bytes for larger integers
+        } else if (value < 16777216) {
+            length = 3; // Use 3 bytes for even larger integers
+        } else if (value < 4294967296L) {
+            length = 4; // Use 4 bytes for very large integers
+        } else {
+            throw new IllegalArgumentException("Integer value too large for PI: " + pi.getName());
+        }
+        if (length > pi.getLength()) {
+            throw new IllegalArgumentException("Integer value exceeds PI length: " + pi.getName());
         }
 
-        // Always use full defined length with leading zero padding
         byte[] bytes = new byte[length];
         for (int i = 0; i < length; i++) {
             bytes[length - 1 - i] = (byte) (value >> (i * 8));
