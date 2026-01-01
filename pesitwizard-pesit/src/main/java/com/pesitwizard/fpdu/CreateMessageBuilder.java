@@ -86,9 +86,20 @@ public class CreateMessageBuilder {
                 new ParameterValue(PI_11_TYPE_FICHIER, fileType),
                 new ParameterValue(PI_12_NOM_FICHIER, filename));
 
-        ParameterValue pgi30 = new ParameterValue(PGI_30_ATTR_LOGIQUES,
-                new ParameterValue(PI_31_FORMAT_ARTICLE, articleFormat),
-                new ParameterValue(PI_32_LONG_ARTICLE, recordLength));
+        // PGI 30: Logical attributes
+        // PI 32 (record length) is only mandatory for fixed format (0x00)
+        // For variable format (0x80), omit PI 32 to let server decide
+        ParameterValue pgi30;
+        if (articleFormat == 0x00 && recordLength > 0) {
+            // Fixed format - must specify record length
+            pgi30 = new ParameterValue(PGI_30_ATTR_LOGIQUES,
+                    new ParameterValue(PI_31_FORMAT_ARTICLE, articleFormat),
+                    new ParameterValue(PI_32_LONG_ARTICLE, recordLength));
+        } else {
+            // Variable format - only send PI 31, let server negotiate PI 32
+            pgi30 = new ParameterValue(PGI_30_ATTR_LOGIQUES,
+                    new ParameterValue(PI_31_FORMAT_ARTICLE, articleFormat));
+        }
         ParameterValue pgi40 = new ParameterValue(PGI_40_ATTR_PHYSIQUES,
                 new ParameterValue(PI_41_UNITE_RESERVATION, allocationUnit),
                 new ParameterValue(PI_42_MAX_RESERVATION, maxReservation));
