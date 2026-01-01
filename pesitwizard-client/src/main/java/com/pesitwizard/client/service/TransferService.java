@@ -622,6 +622,8 @@ public class TransferService {
                 // For variable format, this is the maximum article size
                 int effectiveRecordLength = recordLength > 0 ? recordLength : chunkSize;
                 int effectiveMaxEntity = chunkSize;
+                log.info("CREATE params (non-streaming): recordLength={}, chunkSize={}, effectiveRecordLength={}, effectiveMaxEntity={}, syncPointsEnabled={}",
+                                recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
                 Fpdu createFpdu = new CreateMessageBuilder()
                                 .filename(virtualFile)
                                 .transferId(transferId)
@@ -766,6 +768,8 @@ public class TransferService {
                 // Record length must be >= chunk size to avoid "article length exceeded" errors
                 int effectiveRecordLength = recordLength > 0 ? recordLength : chunkSize;
                 int effectiveMaxEntity = chunkSize;
+                log.info("CREATE params: recordLength={}, chunkSize={}, effectiveRecordLength={}, effectiveMaxEntity={}, syncPointsEnabled={}",
+                                recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
                 Fpdu createFpdu = new CreateMessageBuilder()
                                 .filename(virtualFile)
                                 .transferId(transferId)
