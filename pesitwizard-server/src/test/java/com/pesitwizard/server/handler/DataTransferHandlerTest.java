@@ -1,6 +1,7 @@
 package com.pesitwizard.server.handler;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +19,7 @@ import com.pesitwizard.server.config.PesitServerProperties;
 import com.pesitwizard.server.model.SessionContext;
 import com.pesitwizard.server.model.TransferContext;
 import com.pesitwizard.server.service.FpduValidator;
+import com.pesitwizard.server.service.FpduValidator.ValidationResult;
 import com.pesitwizard.server.service.TransferTracker;
 import com.pesitwizard.server.state.ServerState;
 
@@ -39,6 +41,10 @@ class DataTransferHandlerTest {
     @BeforeEach
     void setUp() {
         handler = new DataTransferHandler(properties, transferTracker, fpduValidator);
+
+        // Default stubs for validator - return OK for all validations
+        lenient().when(fpduValidator.validateDtf(any(), any(), any())).thenReturn(ValidationResult.ok());
+        lenient().when(fpduValidator.validateMaxEntitySize(any(), any())).thenReturn(ValidationResult.ok());
     }
 
     @Test
