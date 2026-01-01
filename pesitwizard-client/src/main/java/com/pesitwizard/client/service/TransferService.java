@@ -13,7 +13,9 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.data.domain.Page;
@@ -68,6 +70,9 @@ import lombok.extern.slf4j.Slf4j;
 public class TransferService {
 
         private static final AtomicInteger TRANSFER_ID_COUNTER = new AtomicInteger(1);
+
+        /** Set of transfer IDs that have been requested to cancel */
+        private final Set<String> cancelledTransfers = ConcurrentHashMap.newKeySet();
 
         private final PesitServerService serverService;
         private final TransferConfigRepository configRepository;
@@ -183,6 +188,9 @@ public class TransferService {
                         progressService.sendFailed(historyId, e.getMessage());
                         log.error("Send transfer failed: {}", e.getMessage(), e);
                 } finally {
+                        // Clear cancellation flag
+                        clearCancellation(historyId);
+
                         if (inputStream != null) {
                                 try {
                                         inputStream.close();
@@ -402,8 +410,7 @@ public class TransferService {
 
         /**
          * Cancel an in-progress transfer.
-         * Marks the transfer as CANCELLED and stores current progress for potential
-         * resume.
+         * Signals the running transfer to stop and marks it as CANCELLED.
          */
         @Transactional
         public Optional<TransferResponse> cancelTransfer(String transferId) {
@@ -415,15 +422,35 @@ public class TransferService {
                                                 return history;
                                         }
 
-                                        log.info("Cancelling transfer {} at {} bytes",
+                                        // Signal the running async transfer to stop
+                                        cancelledTransfers.add(transferId);
+                                        log.info("Signalling cancellation for transfer {} at {} bytes",
                                                         transferId, history.getBytesTransferred());
 
                                         history.setStatus(TransferStatus.CANCELLED);
                                         history.setErrorMessage("Transfer cancelled by user");
                                         history.setCompletedAt(Instant.now());
+
+                                        // Send WebSocket notification
+                                        progressService.sendFailed(transferId, "Transfer cancelled by user");
+
                                         return historyRepository.save(history);
                                 })
                                 .map(this::mapToResponse);
+        }
+
+        /**
+         * Check if a transfer has been cancelled.
+         */
+        private boolean isCancelled(String transferId) {
+                return cancelledTransfers.contains(transferId);
+        }
+
+        /**
+         * Clear cancellation flag after transfer completes.
+         */
+        private void clearCancellation(String transferId) {
+                cancelledTransfers.remove(transferId);
         }
 
         /**
@@ -768,6 +795,12 @@ public class TransferService {
                                 syncIntervalBytes, negotiatedSyncIntervalBytes, syncPointsEnabled);
 
                 while (offset < data.length) {
+                        // Check for cancellation
+                        if (isCancelled(historyId)) {
+                                log.info("Transfer {} cancelled at {} bytes", historyId, offset);
+                                throw new RuntimeException("Transfer cancelled by user");
+                        }
+
                         int currentChunkSize = Math.min(actualChunkSize, data.length - offset);
                         byte[] chunk = new byte[currentChunkSize];
                         System.arraycopy(data, offset, chunk, 0, currentChunkSize);
@@ -978,6 +1011,12 @@ public class TransferService {
                 int bytesRead;
 
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        // Check for cancellation
+                        if (isCancelled(historyId)) {
+                                log.info("Streaming transfer {} cancelled at {} bytes", historyId, totalSent);
+                                throw new RuntimeException("Transfer cancelled by user");
+                        }
+
                         byte[] chunk = bytesRead == buffer.length ? buffer : java.util.Arrays.copyOf(buffer, bytesRead);
 
                         Fpdu dtfFpdu = new Fpdu(FpduType.DTF)
