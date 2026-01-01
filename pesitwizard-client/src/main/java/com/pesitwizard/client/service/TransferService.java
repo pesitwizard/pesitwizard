@@ -659,10 +659,11 @@ public class TransferService {
 
                 // CREATE - use CreateMessageBuilder for correct structure
                 int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF; // PI_13 is 3 bytes max
-                // For variable format, PI 32 (record length) = max article size we'll send
-                // Must be >= negotiated PI 25, so use chunkSize (our PI 25 request)
-                int effectiveRecordLength = chunkSize;
-                int effectiveMaxEntity = chunkSize;
+                // PI 32 (recordLength) must match server config - use config value
+                // PI 25 (maxEntitySize) = min of chunkSize and recordLength (articles <= record
+                // length)
+                int effectiveRecordLength = recordLength > 0 ? recordLength : 1024;
+                int effectiveMaxEntity = Math.min(chunkSize, effectiveRecordLength);
                 log.info("CREATE params (non-streaming): recordLength={}, chunkSize={}, effectiveRecordLength={}, effectiveMaxEntity={}, syncPointsEnabled={}",
                                 recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
                 Fpdu createFpdu = new CreateMessageBuilder()
@@ -850,11 +851,11 @@ public class TransferService {
 
                 // CREATE - use CreateMessageBuilder for correct structure
                 int transferId = TRANSFER_ID_COUNTER.getAndIncrement() % 0xFFFFFF;
-                // For variable format, record length (PI 32) = max article size we'll send
-                // This MUST be >= actual chunk size used after negotiation
-                // Use chunkSize as the record length (server may negotiate down via PI 25)
-                int effectiveRecordLength = chunkSize;
-                int effectiveMaxEntity = chunkSize;
+                // PI 32 (recordLength) must match server config - use config value
+                // PI 25 (maxEntitySize) = min of chunkSize and recordLength (articles <= record
+                // length)
+                int effectiveRecordLength = recordLength > 0 ? recordLength : 1024;
+                int effectiveMaxEntity = Math.min(chunkSize, effectiveRecordLength);
                 log.info("CREATE params: recordLength={}, chunkSize={}, effectiveRecordLength={}, effectiveMaxEntity={}, syncPointsEnabled={}",
                                 recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
                 Fpdu createFpdu = new CreateMessageBuilder()
