@@ -665,14 +665,18 @@ public class TransferService {
                 // DTF chunks = articles, must be <= PI 32
                 int effectiveRecordLength = recordLength > 0 ? recordLength : 1024;
                 int effectiveMaxEntity = effectiveRecordLength + 6; // Entity = article + 6-byte header
-                log.info("CREATE params (non-streaming): recordLength={}, chunkSize={}, PI32(article)={}, PI25(entity)={}, syncPointsEnabled={}",
-                                recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
+                // PI 42 (maxReservation) = file size in KB (with PI 41 = 0 for KB unit)
+                long fileSizeKB = (data.length + 1023) / 1024; // Round up to KB
+                log.info("CREATE params (non-streaming): recordLength={}, chunkSize={}, PI32(article)={}, PI25(entity)={}, PI42(sizeKB)={}, syncPointsEnabled={}",
+                                recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, fileSizeKB,
+                                syncPointsEnabled);
                 Fpdu createFpdu = new CreateMessageBuilder()
                                 .filename(virtualFile)
                                 .transferId(transferId)
                                 .variableFormat()
                                 .recordLength(effectiveRecordLength)
                                 .maxEntitySize(effectiveMaxEntity)
+                                .fileSizeKB(fileSizeKB)
                                 .build(serverConnectionId);
 
                 Fpdu ackCreate = session.sendFpduWithAck(createFpdu);
@@ -861,14 +865,18 @@ public class TransferService {
                 // DTF chunks = articles, must be <= PI 32
                 int effectiveRecordLength = recordLength > 0 ? recordLength : 1024;
                 int effectiveMaxEntity = effectiveRecordLength + 6; // Entity = article + 6-byte header
-                log.info("CREATE params: recordLength={}, chunkSize={}, PI32(article)={}, PI25(entity)={}, syncPointsEnabled={}",
-                                recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, syncPointsEnabled);
+                // PI 42 (maxReservation) = file size in KB (with PI 41 = 0 for KB unit)
+                long fileSizeKB = (fileSize + 1023) / 1024; // Round up to KB
+                log.info("CREATE params: recordLength={}, chunkSize={}, PI32(article)={}, PI25(entity)={}, PI42(sizeKB)={}, syncPointsEnabled={}",
+                                recordLength, chunkSize, effectiveRecordLength, effectiveMaxEntity, fileSizeKB,
+                                syncPointsEnabled);
                 Fpdu createFpdu = new CreateMessageBuilder()
                                 .filename(virtualFile)
                                 .transferId(transferId)
                                 .variableFormat()
                                 .recordLength(effectiveRecordLength)
                                 .maxEntitySize(effectiveMaxEntity)
+                                .fileSizeKB(fileSizeKB)
                                 .build(serverConnectionId);
 
                 Fpdu ackCreateStreaming = session.sendFpduWithAck(createFpdu);

@@ -59,6 +59,15 @@ public class CreateMessageBuilder {
         return this;
     }
 
+    /**
+     * Set max file size in KB (PI 42). Required to announce file size to server.
+     * PI 41 (allocationUnit) = 0 means KB.
+     */
+    public CreateMessageBuilder fileSizeKB(long fileSizeKB) {
+        this.maxReservation = (int) Math.min(fileSizeKB, Integer.MAX_VALUE);
+        return this;
+    }
+
     public CreateMessageBuilder creationDate(Date date) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyMMddHHmmss");
         this.creationDate = sdf.format(date);
