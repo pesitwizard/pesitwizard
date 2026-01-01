@@ -474,6 +474,26 @@ public class TransferService {
                                 .build();
         }
 
+        /**
+         * Calculate optimal chunk size based on file size.
+         * - Small files (< 1MB): 4KB chunks
+         * - Medium files (1MB - 10MB): 16KB chunks
+         * - Large files (10MB - 100MB): 32KB chunks
+         * - Very large files (> 100MB): 64KB chunks
+         * Maximum is capped at 64KB for PeSIT compatibility.
+         */
+        private int calculateOptimalChunkSize(long fileSize) {
+                if (fileSize < 1024 * 1024) { // < 1MB
+                        return 4096; // 4KB
+                } else if (fileSize < 10 * 1024 * 1024) { // < 10MB
+                        return 16384; // 16KB
+                } else if (fileSize < 100 * 1024 * 1024) { // < 100MB
+                        return 32768; // 32KB
+                } else {
+                        return 65536; // 64KB max
+                }
+        }
+
         private TransportChannel createChannel(PesitServer server) {
                 return createChannel(server, 0);
         }
@@ -579,12 +599,14 @@ public class TransferService {
                 String virtualFile = request.getVirtualFile() != null ? request.getVirtualFile()
                                 : request.getRemoteFilename();
                 int fileType = request.getFileType() != null ? request.getFileType() : 0; // default binary
-                int chunkSize = request.getChunkSize() != null ? request.getChunkSize() : config.getChunkSize();
+                // Auto-calculate chunkSize based on file size, or use explicit override
+                int chunkSize = request.getChunkSize() != null ? request.getChunkSize()
+                                : calculateOptimalChunkSize(data.length);
                 int priority = request.getPriority() != null ? request.getPriority() : config.getPriority();
                 int recordLength = config.getRecordLength() != null ? config.getRecordLength() : 0;
 
-                log.info("Transfer config: virtualFile={}, fileType={}, chunkSize={}, priority={}",
-                                virtualFile, fileType, chunkSize, priority);
+                log.info("Transfer config: virtualFile={}, fileType={}, chunkSize={} (fileSize={}), priority={}",
+                                virtualFile, fileType, chunkSize, data.length, priority);
 
                 // Determine sync point settings (request overrides config)
                 boolean syncPointsEnabled = request.getSyncPointsEnabled() != null
@@ -729,11 +751,13 @@ public class TransferService {
                 // Resolve transfer parameters from request or config
                 String virtualFile = request.getVirtualFile() != null ? request.getVirtualFile()
                                 : request.getRemoteFilename();
-                int chunkSize = request.getChunkSize() != null ? request.getChunkSize() : config.getChunkSize();
+                // Auto-calculate chunkSize based on file size, or use explicit override
+                int chunkSize = request.getChunkSize() != null ? request.getChunkSize()
+                                : calculateOptimalChunkSize(fileSize);
                 int recordLength = config.getRecordLength() != null ? config.getRecordLength() : 0;
 
-                log.info("Streaming transfer: virtualFile={}, fileSize={}, chunkSize={}", virtualFile, fileSize,
-                                chunkSize);
+                log.info("Streaming transfer: virtualFile={}, fileSize={}, chunkSize={} (auto-calculated)",
+                                virtualFile, fileSize, chunkSize);
 
                 // Determine sync point settings (request overrides config)
                 boolean syncPointsEnabled = request.getSyncPointsEnabled() != null
