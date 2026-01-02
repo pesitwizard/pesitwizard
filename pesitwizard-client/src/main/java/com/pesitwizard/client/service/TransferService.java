@@ -747,9 +747,12 @@ public class TransferService {
                 log.info("CREATE (streaming): starting negotiation with PI25={}, syncPointsEnabled={}",
                                 initialPi25, syncPointsEnabled);
 
+                // PI 25 (entity) and PI 32 (article) are INDEPENDENT
+                // Use recordLength from config as PI 32, negotiate only PI 25
                 NegotiatedCreate negotiatedStreaming = negotiateCreate(session, serverConnectionId,
-                                virtualFile, transferId, fileSizeKB, initialPi25);
-                int actualChunkSizeStreaming = negotiatedStreaming.negotiatedPi25() - 6;
+                                virtualFile, transferId, fileSizeKB, initialPi25, recordLength);
+                // Actual chunk size = PI 32 (article size), not PI 25 - 6
+                int actualChunkSizeStreaming = recordLength > 0 ? recordLength : 506;
                 log.info("CREATE (streaming) negotiation complete: PI25={}, chunk size={}",
                                 negotiatedStreaming.negotiatedPi25(), actualChunkSizeStreaming);
 
@@ -1128,18 +1131,21 @@ public class TransferService {
 
         /**
          * Negotiate PI 25 (max entity size) with server via CREATE/ACK_CREATE.
-         * Proposes max value and retries with smaller values until accepted.
+         * PI 25 and PI 32 are INDEPENDENT - server may have different limits for each.
+         * PI 32 (article size) is fixed from config, only PI 25 (entity size) is
+         * negotiated.
          * 
+         * @param articleSize Fixed PI 32 value (from config.recordLength)
          * @return NegotiatedCreate with the successful ACK_CREATE and negotiated PI 25
          */
         private NegotiatedCreate negotiateCreate(PesitSession session, int serverConnectionId,
-                        String virtualFile, int transferId, long fileSizeKB, int initialPi25)
+                        String virtualFile, int transferId, long fileSizeKB, int initialPi25, int articleSize)
                         throws IOException, InterruptedException {
                 int proposedPi25 = initialPi25 > 0 ? initialPi25 : 65535; // Start with max if not specified
-                int minPi25 = 64;
+                int proposedPi32 = articleSize > 0 ? articleSize : 506; // Fixed article size (default 506)
+                int minPi25 = proposedPi32 + 6; // Entity must fit at least one article + header
 
                 while (proposedPi25 >= minPi25) {
-                        int proposedPi32 = proposedPi25 - 6;
                         log.info("CREATE: proposing PI25={}, PI32={}", proposedPi25, proposedPi32);
 
                         Fpdu createFpdu = new CreateMessageBuilder()

@@ -52,14 +52,16 @@ public class CxConnectTest {
             int serverConnId = aconnect.getIdSrc();
             System.out.println("Server connection ID: " + serverConnId);
 
-            // 2. CREATE - TRUE NEGOTIATION: propose max, reduce until accepted
-            int proposedPi25 = 65535; // Start with max possible
+            // 2. CREATE - TRUE NEGOTIATION: PI 25 and PI 32 are INDEPENDENT
+            // PI 25 = max entity size (container), PI 32 = max article size (record)
+            // Test hypothesis: use fixed PI 32 = 506, negotiate PI 25 separately
+            int proposedPi32 = 506; // Fixed article size (known working)
+            int proposedPi25 = 65535; // Start with max entity size
             int negotiatedPi25 = proposedPi25;
             Fpdu ackCreate = null;
-            int minPi25 = 64; // Don't go below this
+            int minPi25 = proposedPi32 + 6; // Entity must fit at least one article
 
             while (proposedPi25 >= minPi25) {
-                int proposedPi32 = proposedPi25 - 6;
                 System.out.println("CREATE: proposing PI25=" + proposedPi25 + ", PI32=" + proposedPi32);
                 Fpdu createFpdu = new CreateMessageBuilder()
                         .filename("FILE")
@@ -82,12 +84,18 @@ public class CxConnectTest {
                         DiagnosticCode dc = DiagnosticCode.fromParameterValue(diagPv);
                         System.out.println("CREATE rejected: " + dc);
 
-                        // Read server's suggested PI 25
+                        // Read server's suggested PI 25 AND PI 32
                         ParameterValue serverPi25 = ackCreate.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+                        ParameterValue serverPi32 = ackCreate
+                                .getParameter(ParameterIdentifier.PI_32_LONG_ARTICLE);
                         int serverValue = 0;
                         if (serverPi25 != null && serverPi25.getValue() != null) {
                             serverValue = parseNumeric(serverPi25.getValue());
                             System.out.println("Server PI25 in response=" + serverValue);
+                        }
+                        if (serverPi32 != null && serverPi32.getValue() != null) {
+                            int serverPi32Value = parseNumeric(serverPi32.getValue());
+                            System.out.println("Server PI32 in response=" + serverPi32Value);
                         }
 
                         // Try server's value if smaller, otherwise halve our proposal
@@ -355,9 +363,9 @@ public class CxConnectTest {
             }
 
             // Check PI 32 from ACK_CREATE
-            ParameterValue createPi32 = ackCreate.getParameter(ParameterIdentifier.PI_32_LONG_ARTICLE);
-            if (createPi32 != null) {
-                int serverRecordLen = parseNumeric(createPi32.getValue());
+            ParameterValue serverPi32 = ackCreate.getParameter(ParameterIdentifier.PI_32_LONG_ARTICLE);
+            if (serverPi32 != null) {
+                int serverRecordLen = parseNumeric(serverPi32.getValue());
                 System.out.println("ACK_CREATE PI 32 (record length): " + serverRecordLen);
             }
 
