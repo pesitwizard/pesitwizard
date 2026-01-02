@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import com.pesitwizard.fpdu.DiagnosticCode;
 import com.pesitwizard.fpdu.Fpdu;
 import com.pesitwizard.fpdu.FpduType;
+import com.pesitwizard.fpdu.ParameterIdentifier;
 import com.pesitwizard.server.model.SessionContext;
 import com.pesitwizard.server.model.TransferContext;
 
@@ -32,17 +33,19 @@ class FpduResponseBuilderTest {
         @Test
         @DisplayName("should build ACONNECT response")
         void shouldBuildAconnect() {
-            Fpdu response = FpduResponseBuilder.buildAconnect(sessionContext, 2, true, true);
+            Fpdu response = FpduResponseBuilder.buildAconnect(sessionContext, 2, true, true, 4096, 32);
 
             assertEquals(FpduType.ACONNECT, response.getFpduType());
             assertEquals(1, response.getIdDst());
             assertEquals(2, response.getIdSrc());
+            // Verify PI 25 (max entity size)
+            assertNotNull(response.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE));
         }
 
         @Test
         @DisplayName("should build ACONNECT without options")
         void shouldBuildAconnectWithoutOptions() {
-            Fpdu response = FpduResponseBuilder.buildAconnect(sessionContext, 2, false, false);
+            Fpdu response = FpduResponseBuilder.buildAconnect(sessionContext, 2, false, false, 4096, 32);
 
             assertEquals(FpduType.ACONNECT, response.getFpduType());
         }

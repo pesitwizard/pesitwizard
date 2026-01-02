@@ -28,16 +28,19 @@ public class FpduResponseBuilder {
      * Build ACONNECT response
      */
     public static Fpdu buildAconnect(SessionContext ctx, int protocolVersion,
-            boolean syncPoints, boolean resync) {
+            boolean syncPoints, boolean resync, int maxEntitySize, int syncIntervalKb) {
         Fpdu response = new Fpdu(FpduType.ACONNECT)
                 .withIdDst(ctx.getClientConnectionId())
                 .withIdSrc(ctx.getServerConnectionId())
-                .withParameter(new ParameterValue(PI_06_VERSION, protocolVersion));
+                .withParameter(new ParameterValue(PI_06_VERSION, protocolVersion))
+                .withParameter(new ParameterValue(PI_25_TAILLE_MAX_ENTITE, maxEntitySize));
 
         if (syncPoints) {
-            // PI 7: sync points option - 3 bytes
+            // PI 7: sync points option - 3 bytes [interval_high, interval_low, window]
+            byte intervalHigh = (byte) ((syncIntervalKb >> 8) & 0xFF);
+            byte intervalLow = (byte) (syncIntervalKb & 0xFF);
             response.withParameter(new ParameterValue(PI_07_SYNC_POINTS,
-                    new byte[] { 0x01, 0x00, 0x00 }));
+                    new byte[] { intervalHigh, intervalLow, 0x02 })); // window=2
         }
 
         if (resync) {

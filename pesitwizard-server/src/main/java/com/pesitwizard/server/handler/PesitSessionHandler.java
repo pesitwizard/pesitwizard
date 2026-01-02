@@ -214,7 +214,9 @@ public class PesitSessionHandler {
         return FpduResponseBuilder.buildAconnect(ctx,
                 properties.getProtocolVersion(),
                 properties.isSyncPointsEnabled() && ctx.isSyncPointsEnabled(),
-                properties.isResyncEnabled() && ctx.isResyncEnabled());
+                properties.isResyncEnabled() && ctx.isResyncEnabled(),
+                properties.getMaxEntitySize(),
+                properties.getSyncIntervalKb());
     }
 
     /**
