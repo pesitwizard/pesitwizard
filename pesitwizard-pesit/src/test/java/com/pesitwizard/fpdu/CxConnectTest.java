@@ -17,8 +17,365 @@ public class CxConnectTest {
     private static final String SERVEUR = "CETOM1";
 
     public static void main(String[] args) throws Exception {
-        // Test full transfer flow with CREATE and DTF
-        testFullTransferWithData();
+        // Test 1MB transfer with sync points, interruption and resume
+        testSyncPointsWithResume();
+    }
+
+    /**
+     * Test 1MB transfer with sync points, simulated interruption, and resume.
+     * Phase 1: Start transfer, send some data with sync points, then ABORT
+     * Phase 2: Resume from last sync point and complete
+     */
+    private static void testSyncPointsWithResume() {
+        System.out.println("\n=== Test: 1MB transfer with sync points and resume ===");
+
+        // Generate 1MB of test data
+        int totalDataSize = 1024 * 1024; // 1MB
+        byte[] fullData = new byte[totalDataSize];
+        for (int i = 0; i < totalDataSize; i++) {
+            fullData[i] = (byte) ('A' + (i % 26));
+        }
+
+        // Article size must be <= sync interval for sync points to work
+        // Server negotiates sync interval = 32KB, so use 30KB articles
+        int articleSize = 30 * 1024; // 30KB articles (< 32KB sync interval)
+        int syncIntervalKB = 256; // Proposed - server may negotiate lower (typically 32KB)
+        int syncIntervalBytes = syncIntervalKB * 1024;
+        int interruptAfterSyncPoint = -1; // -1 = no interruption, complete transfer
+
+        System.out.println("Total data: " + (totalDataSize / 1024) + " KB");
+        System.out.println("Article size (PI32): " + articleSize + " bytes");
+        System.out.println("Sync interval: " + syncIntervalKB + " KB");
+        System.out.println("Will interrupt after sync point: " + interruptAfterSyncPoint);
+
+        int lastSyncPoint = 0;
+        long bytesAtLastSync = 0;
+
+        // ========== PHASE 1: Start transfer and interrupt ==========
+        System.out.println(
+                "\n--- PHASE 1: Start transfer, interrupt after " + interruptAfterSyncPoint + " sync points ---");
+
+        try (Socket socket = new Socket(HOST, PORT)) {
+            socket.setSoTimeout(30000);
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+
+            // 1. CONNECT with sync points enabled (PI 7)
+            byte[] pi7Value = new byte[3];
+            pi7Value[0] = (byte) ((syncIntervalKB >> 8) & 0xFF); // interval high byte
+            pi7Value[1] = (byte) (syncIntervalKB & 0xFF); // interval low byte
+            pi7Value[2] = 1; // window = 1
+
+            Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_03_DEMANDEUR, DEMANDEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_04_SERVEUR, SERVEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_06_VERSION, 2))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_07_SYNC_POINTS, pi7Value))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_22_TYPE_ACCES, 0))
+                    .withIdSrc(1)
+                    .withIdDst(0);
+            sendFpdu(out, connectFpdu, "CONNECT");
+            Fpdu aconnect = readFpdu(in, "ACONNECT");
+            if (aconnect.getFpduType() != FpduType.ACONNECT) {
+                System.out.println("ERROR: Expected ACONNECT, got " + aconnect.getFpduType());
+                return;
+            }
+            int serverConnId = aconnect.getIdSrc();
+            System.out.println("Server connection ID: " + serverConnId);
+
+            // Check negotiated PI 7 - USE SERVER'S VALUE!
+            ParameterValue pi7Response = aconnect.getParameter(ParameterIdentifier.PI_07_SYNC_POINTS);
+            if (pi7Response != null) {
+                byte[] pi7Bytes = pi7Response.getValue();
+                syncIntervalKB = ((pi7Bytes[0] & 0xFF) << 8) | (pi7Bytes[1] & 0xFF);
+                syncIntervalBytes = syncIntervalKB * 1024;
+                int window = pi7Bytes[2] & 0xFF;
+                System.out.println("Server PI 7: interval=" + syncIntervalKB + "KB, window=" + window);
+            }
+
+            // 2. CREATE
+            int proposedPi32 = articleSize;
+            int proposedPi25 = 65535;
+            Fpdu createFpdu = new CreateMessageBuilder()
+                    .filename("FILE")
+                    .transferId(1)
+                    .variableFormat()
+                    .recordLength(proposedPi32)
+                    .maxEntitySize(proposedPi25)
+                    .fileSizeKB(totalDataSize / 1024)
+                    .build(serverConnId);
+            sendFpdu(out, createFpdu, "CREATE");
+            Fpdu ackCreate = readFpdu(in, "ACK_CREATE");
+            if (!checkDiagnostic(ackCreate, "ACK_CREATE"))
+                return;
+
+            // 3. OPEN
+            Fpdu openFpdu = new Fpdu(FpduType.OPEN).withIdDst(serverConnId);
+            sendFpdu(out, openFpdu, "OPEN");
+            if (!checkDiagnostic(readFpdu(in, "ACK_OPEN"), "ACK_OPEN"))
+                return;
+
+            // 4. WRITE
+            Fpdu writeFpdu = new Fpdu(FpduType.WRITE).withIdDst(serverConnId);
+            sendFpdu(out, writeFpdu, "WRITE");
+            if (!checkDiagnostic(readFpdu(in, "ACK_WRITE"), "ACK_WRITE"))
+                return;
+
+            // 5. Send data with sync points
+            // IMPORTANT: Sync point must be sent BEFORE exceeding the interval
+            int offset = 0;
+            int currentSyncPoint = 0;
+            int bytesSinceLastSync = 0;
+
+            while (offset < totalDataSize) {
+                int chunkSize = Math.min(articleSize, totalDataSize - offset);
+
+                // Check if sending this chunk would exceed sync interval - send SYN first!
+                if (bytesSinceLastSync + chunkSize > syncIntervalBytes) {
+                    currentSyncPoint++;
+                    System.out.println("Sending SYN #" + currentSyncPoint + " at offset " + offset +
+                            " (bytesSinceLastSync=" + bytesSinceLastSync + ")");
+
+                    Fpdu synFpdu = new Fpdu(FpduType.SYN)
+                            .withIdDst(serverConnId)
+                            .withParameter(new ParameterValue(ParameterIdentifier.PI_20_NUM_SYNC,
+                                    new byte[] { (byte) currentSyncPoint }));
+                    sendFpdu(out, synFpdu, "SYN");
+
+                    Fpdu ackSyn = readFpdu(in, "ACK_SYN");
+                    if (!checkDiagnostic(ackSyn, "ACK_SYN"))
+                        return;
+
+                    lastSyncPoint = currentSyncPoint;
+                    bytesAtLastSync = offset;
+                    bytesSinceLastSync = 0;
+
+                    // Check if we should interrupt (only if interruptAfterSyncPoint > 0)
+                    if (interruptAfterSyncPoint > 0 && currentSyncPoint >= interruptAfterSyncPoint) {
+                        System.out
+                                .println("\n*** SIMULATING INTERRUPTION after sync point " + currentSyncPoint + " ***");
+                        System.out.println("Bytes sent: " + offset + " / " + totalDataSize);
+
+                        Fpdu abortFpdu = new Fpdu(FpduType.ABORT)
+                                .withIdDst(serverConnId)
+                                .withIdSrc(1)
+                                .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG,
+                                        new byte[] { 0, 0, 0 }));
+                        sendFpdu(out, abortFpdu, "ABORT (interruption)");
+                        break;
+                    }
+                }
+
+                // Send DTF
+                byte[] article = new byte[chunkSize];
+                System.arraycopy(fullData, offset, article, 0, chunkSize);
+
+                byte[] dtfBytes = FpduBuilder.buildFpdu(FpduType.DTF, serverConnId, 0, article);
+                out.writeShort(dtfBytes.length);
+                out.write(dtfBytes);
+                out.flush();
+
+                offset += chunkSize;
+                bytesSinceLastSync += chunkSize;
+            }
+
+            // If no interruption, complete the transfer
+            if (interruptAfterSyncPoint < 0) {
+                System.out.println("Transfer complete - sent " + currentSyncPoint + " sync points");
+
+                // Complete transfer
+                Fpdu dtfEndFpdu = new Fpdu(FpduType.DTF_END)
+                        .withIdDst(serverConnId)
+                        .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+                sendFpdu(out, dtfEndFpdu, "DTF_END");
+
+                Fpdu transEndFpdu = new Fpdu(FpduType.TRANS_END).withIdDst(serverConnId);
+                sendFpdu(out, transEndFpdu, "TRANS_END");
+                if (!checkDiagnostic(readFpdu(in, "ACK_TRANS_END"), "ACK_TRANS_END"))
+                    return;
+
+                Fpdu closeFpdu = new Fpdu(FpduType.CLOSE)
+                        .withIdDst(serverConnId)
+                        .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+                sendFpdu(out, closeFpdu, "CLOSE");
+                if (!checkDiagnostic(readFpdu(in, "ACK_CLOSE"), "ACK_CLOSE"))
+                    return;
+
+                Fpdu deselectFpdu = new Fpdu(FpduType.DESELECT)
+                        .withIdDst(serverConnId)
+                        .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+                sendFpdu(out, deselectFpdu, "DESELECT");
+                if (!checkDiagnostic(readFpdu(in, "ACK_DESELECT"), "ACK_DESELECT"))
+                    return;
+
+                Fpdu releaseFpdu = new Fpdu(FpduType.RELEASE)
+                        .withIdDst(serverConnId)
+                        .withIdSrc(1)
+                        .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+                sendFpdu(out, releaseFpdu, "RELEASE");
+                readFpdu(in, "RELCONF");
+
+                System.out.println("\n✓ SUCCESS - 1MB transfer with " + currentSyncPoint + " sync points completed!");
+                return; // Done, no Phase 2 needed
+            }
+
+            System.out.println(
+                    "Phase 1 complete. Last sync point: " + lastSyncPoint + ", bytes at sync: " + bytesAtLastSync);
+
+        } catch (Exception e) {
+            System.out.println("Phase 1 ERROR: " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
+
+        // ========== PHASE 2: Resume from last sync point ==========
+        System.out.println("\n--- PHASE 2: Resume from sync point " + lastSyncPoint + " ---");
+
+        try (Socket socket = new Socket(HOST, PORT)) {
+            socket.setSoTimeout(30000);
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            DataInputStream in = new DataInputStream(socket.getInputStream());
+
+            // 1. CONNECT with sync points and resync enabled (PI 23)
+            byte[] pi7Value = new byte[3];
+            pi7Value[0] = (byte) ((syncIntervalKB >> 8) & 0xFF);
+            pi7Value[1] = (byte) (syncIntervalKB & 0xFF);
+            pi7Value[2] = 1;
+
+            Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_03_DEMANDEUR, DEMANDEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_04_SERVEUR, SERVEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_06_VERSION, 2))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_07_SYNC_POINTS, pi7Value))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_22_TYPE_ACCES, 0))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_23_RESYNC, (byte) 1)) // Enable resync
+                    .withIdSrc(1)
+                    .withIdDst(0);
+            sendFpdu(out, connectFpdu, "CONNECT (resume)");
+            Fpdu aconnect = readFpdu(in, "ACONNECT");
+            if (aconnect.getFpduType() != FpduType.ACONNECT) {
+                System.out.println("ERROR: Expected ACONNECT, got " + aconnect.getFpduType());
+                return;
+            }
+            int serverConnId = aconnect.getIdSrc();
+
+            // 2. CREATE with restart point (PI 18)
+            Fpdu createFpdu = new CreateMessageBuilder()
+                    .filename("FILE")
+                    .transferId(1)
+                    .variableFormat()
+                    .recordLength(articleSize)
+                    .maxEntitySize(65535)
+                    .fileSizeKB(totalDataSize / 1024)
+                    .restartPoint(lastSyncPoint) // Resume from last sync point
+                    .build(serverConnId);
+            sendFpdu(out, createFpdu, "CREATE (resume from sync " + lastSyncPoint + ")");
+            Fpdu ackCreate = readFpdu(in, "ACK_CREATE");
+            if (!checkDiagnostic(ackCreate, "ACK_CREATE"))
+                return;
+
+            // Check server's restart point in ACK_CREATE
+            ParameterValue pi18 = ackCreate.getParameter(ParameterIdentifier.PI_18_POINT_RELANCE);
+            if (pi18 != null) {
+                int serverRestartPoint = parseNumeric(pi18.getValue());
+                System.out.println("Server confirmed restart from sync point: " + serverRestartPoint);
+            }
+
+            // 3. OPEN
+            Fpdu openFpdu = new Fpdu(FpduType.OPEN).withIdDst(serverConnId);
+            sendFpdu(out, openFpdu, "OPEN");
+            if (!checkDiagnostic(readFpdu(in, "ACK_OPEN"), "ACK_OPEN"))
+                return;
+
+            // 4. WRITE
+            Fpdu writeFpdu = new Fpdu(FpduType.WRITE).withIdDst(serverConnId);
+            sendFpdu(out, writeFpdu, "WRITE");
+            if (!checkDiagnostic(readFpdu(in, "ACK_WRITE"), "ACK_WRITE"))
+                return;
+
+            // 5. Resume sending data from bytesAtLastSync
+            int offset = (int) bytesAtLastSync;
+            int currentSyncPoint = lastSyncPoint;
+            int nextSyncAt = (int) bytesAtLastSync + syncIntervalBytes;
+            int articlesSent = 0;
+
+            System.out.println("Resuming from offset " + offset + " (sync point " + lastSyncPoint + ")");
+
+            while (offset < totalDataSize) {
+                // Check if we should send a sync point
+                if (offset >= nextSyncAt) {
+                    currentSyncPoint++;
+                    System.out.println("Sending SYN #" + currentSyncPoint + " at offset " + offset);
+
+                    Fpdu synFpdu = new Fpdu(FpduType.SYN)
+                            .withIdDst(serverConnId)
+                            .withParameter(new ParameterValue(ParameterIdentifier.PI_20_NUM_SYNC,
+                                    new byte[] { (byte) currentSyncPoint }));
+                    sendFpdu(out, synFpdu, "SYN");
+
+                    Fpdu ackSyn = readFpdu(in, "ACK_SYN");
+                    if (!checkDiagnostic(ackSyn, "ACK_SYN"))
+                        return;
+
+                    nextSyncAt += syncIntervalBytes;
+                }
+
+                // Send DTF
+                int chunkSize = Math.min(articleSize, totalDataSize - offset);
+                byte[] article = new byte[chunkSize];
+                System.arraycopy(fullData, offset, article, 0, chunkSize);
+
+                byte[] dtfBytes = FpduBuilder.buildFpdu(FpduType.DTF, serverConnId, 0, article);
+                out.writeShort(dtfBytes.length);
+                out.write(dtfBytes);
+                out.flush();
+
+                offset += chunkSize;
+                articlesSent++;
+            }
+            System.out.println("Sent " + articlesSent + " articles after resume");
+
+            // 6. Complete transfer
+            Fpdu dtfEndFpdu = new Fpdu(FpduType.DTF_END)
+                    .withIdDst(serverConnId)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+            sendFpdu(out, dtfEndFpdu, "DTF_END");
+
+            Fpdu transEndFpdu = new Fpdu(FpduType.TRANS_END).withIdDst(serverConnId);
+            sendFpdu(out, transEndFpdu, "TRANS_END");
+            if (!checkDiagnostic(readFpdu(in, "ACK_TRANS_END"), "ACK_TRANS_END"))
+                return;
+
+            Fpdu closeFpdu = new Fpdu(FpduType.CLOSE)
+                    .withIdDst(serverConnId)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+            sendFpdu(out, closeFpdu, "CLOSE");
+            if (!checkDiagnostic(readFpdu(in, "ACK_CLOSE"), "ACK_CLOSE"))
+                return;
+
+            Fpdu deselectFpdu = new Fpdu(FpduType.DESELECT)
+                    .withIdDst(serverConnId)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+            sendFpdu(out, deselectFpdu, "DESELECT");
+            if (!checkDiagnostic(readFpdu(in, "ACK_DESELECT"), "ACK_DESELECT"))
+                return;
+
+            Fpdu releaseFpdu = new Fpdu(FpduType.RELEASE)
+                    .withIdDst(serverConnId)
+                    .withIdSrc(1)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 }));
+            sendFpdu(out, releaseFpdu, "RELEASE");
+            readFpdu(in, "RELCONF");
+
+            System.out.println("\n✓ SUCCESS - 1MB transfer with sync points and resume completed!");
+            System.out.println("  Total sync points: " + currentSyncPoint);
+            System.out.println("  Interrupted at sync point: " + lastSyncPoint);
+            System.out.println("  Resumed and completed successfully");
+
+        } catch (Exception e) {
+            System.out.println("Phase 2 ERROR: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /**

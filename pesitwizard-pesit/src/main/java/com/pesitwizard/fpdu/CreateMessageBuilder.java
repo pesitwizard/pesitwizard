@@ -23,6 +23,7 @@ public class CreateMessageBuilder {
     private int allocationUnit = 0; // 0=Koctets
     private int maxReservation = 0; // 0=no limit
     private String creationDate = null;
+    private int restartPoint = -1; // PI 18: restart from sync point (-1 = not set)
 
     public CreateMessageBuilder filename(String filename) {
         this.filename = filename;
@@ -75,6 +76,16 @@ public class CreateMessageBuilder {
     }
 
     /**
+     * Set restart point (PI 18) for resuming from a sync point.
+     * 
+     * @param syncPoint The sync point number to restart from
+     */
+    public CreateMessageBuilder restartPoint(int syncPoint) {
+        this.restartPoint = syncPoint;
+        return this;
+    }
+
+    /**
      * Build complete CREATE FPDU with all parameters
      * 
      * @param serverConnectionId Server connection ID from ACONNECT
@@ -114,8 +125,15 @@ public class CreateMessageBuilder {
         ParameterValue pi25 = new ParameterValue(PI_25_TAILLE_MAX_ENTITE, maxEntitySize);
 
         // Note: PI_15 and PI_16 not included - not in CREATE parameter requirements
-        return new Fpdu(FpduType.CREATE).withParameter(pgi9).withParameter(pi13)
+        Fpdu fpdu = new Fpdu(FpduType.CREATE).withParameter(pgi9).withParameter(pi13)
                 .withParameter(pi17).withParameter(pi25).withParameter(pgi30).withParameter(pgi40).withParameter(pgi50)
                 .withIdDst(serverConnectionId);
+
+        // Add PI 18 (restart point) if set - for resuming from a sync point
+        if (restartPoint >= 0) {
+            fpdu.withParameter(new ParameterValue(PI_18_POINT_RELANCE, restartPoint));
+        }
+
+        return fpdu;
     }
 }
