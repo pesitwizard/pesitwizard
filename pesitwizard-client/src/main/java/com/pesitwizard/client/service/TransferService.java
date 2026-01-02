@@ -753,6 +753,36 @@ public class TransferService {
 
                 Fpdu ackCreate = session.sendFpduWithAck(createFpdu);
 
+                // Check for error diagnostic in ACK_CREATE (D2_2xx = negotiation error)
+                ParameterValue diag = ackCreate.getParameter(ParameterIdentifier.PI_02_DIAG);
+                if (diag != null && diag.getValue() != null && diag.getValue().length >= 3) {
+                        byte[] diagBytes = diag.getValue();
+                        int diagCode = diagBytes[0] & 0xFF;
+                        int diagReason = ((diagBytes[1] & 0xFF) << 8) | (diagBytes[2] & 0xFF);
+                        if (diagCode == 2) { // D2_xxx = negotiation/parameter error
+                                log.warn("ACK_CREATE returned error D{}_{}", diagCode, diagReason);
+                                // Extract server's PI 25 and retry
+                                ParameterValue serverPi25 = ackCreate
+                                                .getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+                                if (serverPi25 != null && serverPi25.getValue() != null) {
+                                        int serverMaxEntity = parseNumericValue(serverPi25.getValue());
+                                        log.info("Server max entity (PI 25) = {}, retrying CREATE", serverMaxEntity);
+                                        effectiveMaxEntity = serverMaxEntity;
+                                        effectiveRecordLength = serverMaxEntity - 6;
+                                        // Retry CREATE with server's values
+                                        createFpdu = new CreateMessageBuilder()
+                                                        .filename(virtualFile)
+                                                        .transferId(transferId)
+                                                        .variableFormat()
+                                                        .recordLength(effectiveRecordLength)
+                                                        .maxEntitySize(effectiveMaxEntity)
+                                                        .fileSizeKB(fileSizeKB)
+                                                        .build(serverConnectionId);
+                                        ackCreate = session.sendFpduWithAck(createFpdu);
+                                }
+                        }
+                }
+
                 // Use negotiated max entity size from ACK_CREATE (PI 25) to determine max
                 // article size
                 // Actual chunk (article) size = min(PI 32, negotiated PI 25 - 6)
@@ -974,6 +1004,36 @@ public class TransferService {
                                 .build(serverConnectionId);
 
                 Fpdu ackCreateStreaming = session.sendFpduWithAck(createFpdu);
+
+                // Check for error diagnostic in ACK_CREATE (D2_2xx = negotiation error)
+                ParameterValue diagStreaming = ackCreateStreaming.getParameter(ParameterIdentifier.PI_02_DIAG);
+                if (diagStreaming != null && diagStreaming.getValue() != null && diagStreaming.getValue().length >= 3) {
+                        byte[] diagBytes = diagStreaming.getValue();
+                        int diagCode = diagBytes[0] & 0xFF;
+                        int diagReason = ((diagBytes[1] & 0xFF) << 8) | (diagBytes[2] & 0xFF);
+                        if (diagCode == 2) { // D2_xxx = negotiation/parameter error
+                                log.warn("ACK_CREATE returned error D{}_{}", diagCode, diagReason);
+                                // Extract server's PI 25 and retry
+                                ParameterValue serverPi25 = ackCreateStreaming
+                                                .getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+                                if (serverPi25 != null && serverPi25.getValue() != null) {
+                                        int serverMaxEntity = parseNumericValue(serverPi25.getValue());
+                                        log.info("Server max entity (PI 25) = {}, retrying CREATE", serverMaxEntity);
+                                        effectiveMaxEntity = serverMaxEntity;
+                                        effectiveRecordLength = serverMaxEntity - 6;
+                                        // Retry CREATE with server's values
+                                        createFpdu = new CreateMessageBuilder()
+                                                        .filename(virtualFile)
+                                                        .transferId(transferId)
+                                                        .variableFormat()
+                                                        .recordLength(effectiveRecordLength)
+                                                        .maxEntitySize(effectiveMaxEntity)
+                                                        .fileSizeKB(fileSizeKB)
+                                                        .build(serverConnectionId);
+                                        ackCreateStreaming = session.sendFpduWithAck(createFpdu);
+                                }
+                        }
+                }
 
                 // Use negotiated max entity size from ACK_CREATE (PI 25) to determine max
                 // article size

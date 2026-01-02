@@ -87,20 +87,13 @@ public class CreateMessageBuilder {
                 new ParameterValue(PI_12_NOM_FICHIER, filename));
 
         // PGI 30: Logical attributes
-        // PI 32 (record length): 0 = unlimited/server decides
-        // For fixed format (0x00), recordLength must be specified > 0
-        ParameterValue pgi30;
-        if (articleFormat == 0x00 && recordLength > 0) {
-            // Fixed format - must specify record length
-            pgi30 = new ParameterValue(PGI_30_ATTR_LOGIQUES,
-                    new ParameterValue(PI_31_FORMAT_ARTICLE, articleFormat),
-                    new ParameterValue(PI_32_LONG_ARTICLE, recordLength));
-        } else {
-            // Variable format - send PI 32 = 0 to indicate unlimited/server decides
-            pgi30 = new ParameterValue(PGI_30_ATTR_LOGIQUES,
-                    new ParameterValue(PI_31_FORMAT_ARTICLE, articleFormat),
-                    new ParameterValue(PI_32_LONG_ARTICLE, 0));
-        }
+        // PI 32 (record length): must be > 0, CX crashes with "Null length for a
+        // record" if 0
+        // Use recordLength if set, otherwise default to 1024
+        int effectiveRecordLength = recordLength > 0 ? recordLength : 1024;
+        ParameterValue pgi30 = new ParameterValue(PGI_30_ATTR_LOGIQUES,
+                new ParameterValue(PI_31_FORMAT_ARTICLE, articleFormat),
+                new ParameterValue(PI_32_LONG_ARTICLE, effectiveRecordLength));
         ParameterValue pgi40 = new ParameterValue(PGI_40_ATTR_PHYSIQUES,
                 new ParameterValue(PI_41_UNITE_RESERVATION, allocationUnit),
                 new ParameterValue(PI_42_MAX_RESERVATION, maxReservation));

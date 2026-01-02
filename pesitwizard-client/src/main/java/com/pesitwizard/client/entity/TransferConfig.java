@@ -95,7 +95,7 @@ public class TransferConfig {
 
     /** Record length (for fixed format) - also used as max article size in DTF */
     @Builder.Default
-    private Integer recordLength = 4096; // Max PeSIT SIT standard for compatibility
+    private Integer recordLength = 506; // Safe default tested with CX (PI 25 = 512)
 
     /** Data code: A=ASCII, E=EBCDIC, B=Binary */
     @Builder.Default

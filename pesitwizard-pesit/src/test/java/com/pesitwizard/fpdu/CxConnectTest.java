@@ -17,20 +17,127 @@ public class CxConnectTest {
     private static final String SERVEUR = "CETOM1";
 
     public static void main(String[] args) throws Exception {
-        // Test with CX config: 32 KB interval, window 2
-        testConnect("PI 7 = 32KB, w=2 (CX config)", new byte[] { 0x00, 0x20, 0x02 });
+        // Test full transfer flow with CREATE
+        testFullTransfer();
+    }
 
-        // Test 1: No sync points (PI 7 absent)
-        testConnect("No PI 7", null);
+    private static void testFullTransfer() {
+        System.out.println("\n=== Test: Full CONNECT + CREATE flow ===");
 
-        // Test 2: Sync disabled (interval=0, window=0)
-        testConnect("PI 7 = 0,0,0", new byte[] { 0x00, 0x00, 0x00 });
+        try (Socket socket = new Socket(HOST, PORT)) {
+            socket.setSoTimeout(10000);
+            DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+            DataInputStream in = new DataInputStream(socket.getInputStream());
 
-        // Test 3: Sync with interval=64KB, window=1
-        testConnect("PI 7 = 64KB, w=1", new byte[] { 0x00, 0x40, 0x01 });
+            // 1. CONNECT
+            Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_03_DEMANDEUR, DEMANDEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_04_SERVEUR, SERVEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_06_VERSION, 2))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_22_TYPE_ACCES, 0))
+                    .withIdSrc(1)
+                    .withIdDst(0);
 
-        // Test 4: Sync with interval=4KB (SIT min), window=1
-        testConnect("PI 7 = 4KB, w=1", new byte[] { 0x00, 0x04, 0x01 });
+            byte[] fpduData = FpduBuilder.buildFpdu(connectFpdu);
+            System.out.println("Sending CONNECT (" + fpduData.length + " bytes)");
+            out.writeShort(fpduData.length);
+            out.write(fpduData);
+            out.flush();
+
+            // Read ACONNECT
+            Fpdu aconnect = FpduIO.readFpdu(in);
+            System.out.println("Got: " + aconnect.getFpduType());
+
+            if (aconnect.getFpduType() != FpduType.ACONNECT) {
+                System.out.println("Expected ACONNECT, aborting");
+                return;
+            }
+
+            int serverConnId = aconnect.getIdSrc();
+            System.out.println("Server connection ID: " + serverConnId);
+
+            // Check PI 25 from ACONNECT
+            ParameterValue aconnectPi25 = aconnect.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+            if (aconnectPi25 != null) {
+                int serverMaxEntity = parseNumeric(aconnectPi25.getValue());
+                System.out.println("ACONNECT PI 25 (max entity): " + serverMaxEntity);
+            } else {
+                System.out.println("ACONNECT: No PI 25");
+            }
+
+            // 2. CREATE with small values PI 32 = 506, PI 25 = 512
+            System.out.println("\n--- Sending CREATE with PI 32 = 506, PI 25 = 512 ---");
+            Fpdu createFpdu = new CreateMessageBuilder()
+                    .filename("FILE")
+                    .transferId(1)
+                    .variableFormat()
+                    .recordLength(506) // PI 32 = 512 - 6
+                    .maxEntitySize(512) // PI 25
+                    .fileSizeKB(1)
+                    .build(serverConnId);
+
+            byte[] createData = FpduBuilder.buildFpdu(createFpdu);
+            System.out.println("Sending CREATE (" + createData.length + " bytes)");
+            printHex("CREATE", createData);
+            out.writeShort(createData.length);
+            out.write(createData);
+            out.flush();
+
+            // Read ACK_CREATE or error
+            Fpdu ackCreate = FpduIO.readFpdu(in);
+            System.out.println("Got: " + ackCreate.getFpduType());
+
+            // Check for diagnostic
+            ParameterValue diag = ackCreate.getParameter(ParameterIdentifier.PI_02_DIAG);
+            if (diag != null) {
+                byte[] diagBytes = diag.getValue();
+                System.out.println("Diagnostic: " + bytesToHex(diagBytes));
+                if (diagBytes.length >= 3) {
+                    int code = diagBytes[0] & 0xFF;
+                    int reason = ((diagBytes[1] & 0xFF) << 8) | (diagBytes[2] & 0xFF);
+                    System.out.println("  Code: " + code + ", Reason: " + reason + " (D" + code + "_" + reason + ")");
+                }
+            }
+
+            // Check PI 25 from ACK_CREATE
+            ParameterValue createPi25 = ackCreate.getParameter(ParameterIdentifier.PI_25_TAILLE_MAX_ENTITE);
+            if (createPi25 != null) {
+                int serverMaxEntity = parseNumeric(createPi25.getValue());
+                System.out.println("ACK_CREATE PI 25 (max entity): " + serverMaxEntity);
+            }
+
+            // Check PI 32 from ACK_CREATE
+            ParameterValue createPi32 = ackCreate.getParameter(ParameterIdentifier.PI_32_LONG_ARTICLE);
+            if (createPi32 != null) {
+                int serverRecordLen = parseNumeric(createPi32.getValue());
+                System.out.println("ACK_CREATE PI 32 (record length): " + serverRecordLen);
+            }
+
+            // Send RELEASE to close session cleanly
+            System.out.println("\n--- Sending RELEASE ---");
+            Fpdu releaseFpdu = new Fpdu(FpduType.RELEASE)
+                    .withIdDst(serverConnId)
+                    .withIdSrc(1);
+            byte[] releaseData = FpduBuilder.buildFpdu(releaseFpdu);
+            out.writeShort(releaseData.length);
+            out.write(releaseData);
+            out.flush();
+            System.out.println("Session closed cleanly");
+
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static int parseNumeric(byte[] bytes) {
+        if (bytes == null || bytes.length == 0)
+            return 0;
+        int value = 0;
+        for (byte b : bytes) {
+            value = (value << 8) | (b & 0xFF);
+        }
+        return value;
     }
 
     private static void testConnect(String description, byte[] pi7Value) {
