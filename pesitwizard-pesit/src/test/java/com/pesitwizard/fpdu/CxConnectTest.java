@@ -4,8 +4,11 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.Socket;
 
+import com.pesitwizard.session.PesitSession;
+import com.pesitwizard.transport.TcpTransportChannel;
+
 /**
- * Test script to find valid PI 7 (sync points) configuration for CX server.
+ * Test script for CX server using PesitSession and TcpTransportChannel.
  * Run with: mvn exec:java -Dexec.mainClass="com.pesitwizard.fpdu.CxConnectTest"
  * -Dexec.classpathScope=test -pl pesitwizard-pesit
  */
@@ -17,8 +20,125 @@ public class CxConnectTest {
     private static final String SERVEUR = "CETOM1";
 
     public static void main(String[] args) throws Exception {
-        // Test 1MB transfer with sync points, interruption and resume
-        testSyncPointsWithResume();
+        // Test using PesitSession and TcpTransportChannel
+        testWithPesitSession();
+    }
+
+    /**
+     * Test 1MB transfer using PesitSession and TcpTransportChannel abstractions.
+     * Much cleaner than raw socket manipulation.
+     */
+    private static void testWithPesitSession() {
+        System.out.println("\n=== Test: 1MB transfer using PesitSession ===");
+
+        // Generate 1MB of test data
+        int totalDataSize = 1024 * 1024; // 1MB
+        byte[] fullData = new byte[totalDataSize];
+        for (int i = 0; i < totalDataSize; i++) {
+            fullData[i] = (byte) ('A' + (i % 26));
+        }
+
+        int articleSize = 30 * 1024; // 30KB articles
+        int syncIntervalKB = 256; // Proposed - server will negotiate
+
+        System.out.println("Total data: " + (totalDataSize / 1024) + " KB");
+        System.out.println("Article size: " + articleSize + " bytes");
+
+        TcpTransportChannel channel = new TcpTransportChannel(HOST, PORT);
+        try (PesitSession session = new PesitSession(channel)) {
+
+            // 1. CONNECT with sync points
+            byte[] pi7Value = new byte[] {
+                    (byte) ((syncIntervalKB >> 8) & 0xFF),
+                    (byte) (syncIntervalKB & 0xFF),
+                    1 // window = 1
+            };
+            Fpdu connectFpdu = new Fpdu(FpduType.CONNECT)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_03_DEMANDEUR, DEMANDEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_04_SERVEUR, SERVEUR))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_06_VERSION, 2))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_07_SYNC_POINTS, pi7Value))
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_22_TYPE_ACCES, 0))
+                    .withIdSrc(1).withIdDst(0);
+
+            Fpdu aconnect = session.sendFpduWithAck(connectFpdu);
+            int serverConnId = aconnect.getIdSrc();
+            System.out.println("Connected, server ID: " + serverConnId);
+
+            // Get negotiated sync interval
+            ParameterValue pi7Response = aconnect.getParameter(ParameterIdentifier.PI_07_SYNC_POINTS);
+            int syncIntervalBytes = syncIntervalKB * 1024;
+            if (pi7Response != null) {
+                byte[] pi7Bytes = pi7Response.getValue();
+                syncIntervalKB = ((pi7Bytes[0] & 0xFF) << 8) | (pi7Bytes[1] & 0xFF);
+                syncIntervalBytes = syncIntervalKB * 1024;
+                System.out.println("Negotiated sync interval: " + syncIntervalKB + " KB");
+            }
+
+            // 2. CREATE
+            Fpdu createFpdu = new CreateMessageBuilder()
+                    .filename("FILE")
+                    .transferId(1)
+                    .variableFormat()
+                    .recordLength(articleSize)
+                    .maxEntitySize(65535)
+                    .fileSizeKB(totalDataSize / 1024)
+                    .build(serverConnId);
+            session.sendFpduWithAck(createFpdu);
+            System.out.println("CREATE accepted");
+
+            // 3. OPEN
+            session.sendFpduWithAck(new Fpdu(FpduType.OPEN).withIdDst(serverConnId));
+
+            // 4. WRITE
+            session.sendFpduWithAck(new Fpdu(FpduType.WRITE).withIdDst(serverConnId));
+
+            // 5. Send data with sync points
+            int offset = 0;
+            int syncCount = 0;
+            int bytesSinceSync = 0;
+
+            while (offset < totalDataSize) {
+                int chunkSize = Math.min(articleSize, totalDataSize - offset);
+
+                // Send SYN before exceeding interval
+                if (bytesSinceSync + chunkSize > syncIntervalBytes) {
+                    syncCount++;
+                    Fpdu synFpdu = new Fpdu(FpduType.SYN)
+                            .withIdDst(serverConnId)
+                            .withParameter(new ParameterValue(ParameterIdentifier.PI_20_NUM_SYNC,
+                                    new byte[] { (byte) syncCount }));
+                    session.sendFpduWithAck(synFpdu);
+                    bytesSinceSync = 0;
+                }
+
+                // Send DTF
+                byte[] article = new byte[chunkSize];
+                System.arraycopy(fullData, offset, article, 0, chunkSize);
+                session.sendFpduWithData(new Fpdu(FpduType.DTF).withIdDst(serverConnId), article);
+
+                offset += chunkSize;
+                bytesSinceSync += chunkSize;
+            }
+            System.out.println("Sent " + syncCount + " sync points");
+
+            // 6. Complete transfer
+            session.sendFpdu(new Fpdu(FpduType.DTF_END).withIdDst(serverConnId)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 })));
+            session.sendFpduWithAck(new Fpdu(FpduType.TRANS_END).withIdDst(serverConnId));
+            session.sendFpduWithAck(new Fpdu(FpduType.CLOSE).withIdDst(serverConnId)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 })));
+            session.sendFpduWithAck(new Fpdu(FpduType.DESELECT).withIdDst(serverConnId)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 })));
+            session.sendFpduWithAck(new Fpdu(FpduType.RELEASE).withIdDst(serverConnId).withIdSrc(1)
+                    .withParameter(new ParameterValue(ParameterIdentifier.PI_02_DIAG, new byte[] { 0, 0, 0 })));
+
+            System.out.println("\n✓ SUCCESS - 1MB transfer with " + syncCount + " sync points completed!");
+
+        } catch (Exception e) {
+            System.out.println("ERROR: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /**
