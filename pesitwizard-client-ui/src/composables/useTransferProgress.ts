@@ -1,5 +1,4 @@
-import { Client } from '@stomp/stompjs'
-import SockJS from 'sockjs-client'
+import { Client, type IMessage } from '@stomp/stompjs'
 import { onUnmounted, ref } from 'vue'
 
 export interface TransferProgress {
@@ -20,32 +19,53 @@ export function useTransferProgress() {
   const error = ref<string | null>(null)
   
   let stompClient: Client | null = null
-  let subscription: any = null
+  let subscription: { unsubscribe: () => void } | null = null
+  let pendingTransferId: string | null = null
 
   const connect = () => {
     if (stompClient?.connected) {
+      console.log('[WS] Already connected')
       return
     }
 
-    const baseUrl = import.meta.env.VITE_API_URL || ''
+    // Use native WebSocket with SockJS fallback URL format
+    // Spring's SockJS endpoint supports raw WebSocket at /ws/websocket
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/websocket`
+    
+    console.log('[WS] Connecting to:', wsUrl)
     
     stompClient = new Client({
-      webSocketFactory: () => new SockJS(baseUrl + '/ws'),
+      brokerURL: wsUrl,
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
+      debug: (str) => {
+        console.log('[STOMP]', str)
+      },
       onConnect: () => {
         connected.value = true
         error.value = null
-        console.log('WebSocket connected')
+        console.log('[WS] Connected!')
+        // If there's a pending subscription, do it now
+        if (pendingTransferId) {
+          doSubscribe(pendingTransferId)
+          pendingTransferId = null
+        }
       },
       onDisconnect: () => {
         connected.value = false
-        console.log('WebSocket disconnected')
+        console.log('[WS] Disconnected')
       },
       onStompError: (frame) => {
         error.value = frame.headers['message'] || 'WebSocket error'
-        console.error('STOMP error:', frame)
+        console.error('[WS] STOMP error:', frame)
+      },
+      onWebSocketError: (event) => {
+        console.error('[WS] WebSocket error:', event)
+        error.value = 'WebSocket connection error'
+      },
+      onWebSocketClose: (event) => {
+        console.log('[WS] WebSocket closed:', event.code, event.reason)
       }
     })
 
@@ -53,20 +73,21 @@ export function useTransferProgress() {
   }
 
   const subscribeToTransfer = (transferId: string) => {
-    if (!stompClient?.connected) {
+    console.log('[WS] subscribeToTransfer called for:', transferId)
+    
+    if (!stompClient) {
+      pendingTransferId = transferId
       connect()
-      // Wait for connection then subscribe
-      const checkConnection = setInterval(() => {
-        if (stompClient?.connected) {
-          clearInterval(checkConnection)
-          doSubscribe(transferId)
-        }
-      }, 100)
-      // Timeout after 5 seconds
-      setTimeout(() => clearInterval(checkConnection), 5000)
-    } else {
-      doSubscribe(transferId)
+      return
     }
+    
+    if (!stompClient.connected) {
+      console.log('[WS] Not connected yet, will subscribe when connected')
+      pendingTransferId = transferId
+      return
+    }
+    
+    doSubscribe(transferId)
   }
 
   const doSubscribe = (transferId: string) => {
@@ -75,18 +96,18 @@ export function useTransferProgress() {
     }
 
     const destination = `/topic/transfer/${transferId}/progress`
-    console.log('Subscribing to:', destination)
+    console.log('[WS] Subscribing to:', destination)
     
-    subscription = stompClient?.subscribe(destination, (message) => {
+    subscription = stompClient?.subscribe(destination, (message: IMessage) => {
       try {
         const data = JSON.parse(message.body) as TransferProgress
         progress.value = data
-        console.log('Progress update:', data.bytesTransferredFormatted, '/', data.fileSizeFormatted, 
+        console.log('[WS] Progress:', data.bytesTransferredFormatted, '/', data.fileSizeFormatted, 
           data.percentage >= 0 ? `(${data.percentage}%)` : '')
       } catch (e) {
-        console.error('Failed to parse progress message:', e)
+        console.error('[WS] Failed to parse progress message:', e)
       }
-    })
+    }) || null
   }
 
   const unsubscribe = () => {
@@ -94,6 +115,7 @@ export function useTransferProgress() {
       subscription.unsubscribe()
       subscription = null
     }
+    pendingTransferId = null
   }
 
   const disconnect = () => {
@@ -108,6 +130,7 @@ export function useTransferProgress() {
   const reset = () => {
     progress.value = null
     error.value = null
+    pendingTransferId = null
   }
 
   onUnmounted(() => {
