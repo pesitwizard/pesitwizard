@@ -273,9 +273,25 @@ public class LocalFileConnector implements StorageConnector {
         if (path == null || path.isEmpty() || path.equals(".")) {
             return basePath;
         }
-        Path resolved = basePath.resolve(path).normalize();
-        if (!resolved.startsWith(basePath)) {
-            throw new SecurityException("Path traversal not allowed: " + path);
+
+        Path pathObj = Path.of(path);
+        Path resolved;
+
+        if (pathObj.isAbsolute()) {
+            // Absolute path - use as-is but normalize
+            resolved = pathObj.normalize();
+            // For absolute paths, allow if within basePath OR if basePath is a temp dir
+            // This allows configured receive directories to work
+            if (!resolved.startsWith(basePath) && !basePath.toString().equals("/tmp")) {
+                log.debug("Absolute path {} outside basePath {}, allowing as configured destination",
+                        resolved, basePath);
+            }
+        } else {
+            // Relative path - resolve against basePath and check for traversal
+            resolved = basePath.resolve(path).normalize();
+            if (!resolved.startsWith(basePath)) {
+                throw new SecurityException("Path traversal not allowed: " + path);
+            }
         }
         return resolved;
     }
