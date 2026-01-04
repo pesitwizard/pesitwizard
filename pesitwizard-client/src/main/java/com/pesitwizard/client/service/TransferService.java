@@ -317,11 +317,14 @@ public class TransferService {
                                 return; // Success - exit loop
 
                         } catch (RestartRequiredException e) {
+                                log.info("RestartRequiredException caught: attempt={}, MAX_RESTART_ATTEMPTS={}, syncPoint={}, bytePos={}",
+                                                attempt, MAX_RESTART_ATTEMPTS, e.getSyncPoint(), e.getBytePosition());
                                 if (attempt < MAX_RESTART_ATTEMPTS) {
                                         restartPoint = e.getSyncPoint();
                                         restartBytePosition = e.getBytePosition();
-                                        log.info("Restart required - will retry from sync point {} (byte {})",
-                                                        restartPoint, restartBytePosition);
+                                        log.info("Restart required - will retry (attempt {}/{}) from sync point {} (byte {})",
+                                                        attempt + 1, MAX_RESTART_ATTEMPTS, restartPoint,
+                                                        restartBytePosition);
                                         // Small delay before retry
                                         try {
                                                 Thread.sleep(1000);
@@ -330,8 +333,8 @@ public class TransferService {
                                                 throw new RuntimeException("Interrupted during restart delay", ie);
                                         }
                                 } else {
-                                        log.error("Max restart attempts ({}) exceeded for transfer {}",
-                                                        MAX_RESTART_ATTEMPTS, historyId);
+                                        log.error("Max restart attempts ({}) exceeded for transfer {} (attempt={})",
+                                                        MAX_RESTART_ATTEMPTS, historyId, attempt);
                                         historyRepository.findById(historyId).ifPresent(history -> {
                                                 history.setStatus(TransferStatus.FAILED);
                                                 history.setErrorMessage(
