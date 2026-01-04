@@ -536,25 +536,26 @@ async function resumeTransfer(transferId: string) {
             </button>
             
             <div v-if="showAdvancedOptions" class="mt-4 space-y-4 p-4 bg-gray-50 rounded-lg">
-              <!-- Sync Points -->
+              <!-- Resume / Checkpoint -->
               <div>
                 <label class="flex items-center gap-2">
                   <input 
                     v-model="form.syncPointsEnabled" 
                     type="checkbox" 
                     class="rounded border-gray-300 text-primary-600"
+                    @change="form.resyncEnabled = form.syncPointsEnabled"
                   />
-                  <span class="text-sm font-medium text-gray-700">Enable Sync Points</span>
+                  <span class="text-sm font-medium text-gray-700">Enable Resume (Checkpoints)</span>
                 </label>
                 <p class="text-xs text-gray-500 mt-1 ml-6">
-                  Create checkpoints during transfer for resume capability
+                  Create periodic checkpoints to allow resuming if transfer is interrupted
                 </p>
               </div>
 
-              <!-- Sync Point Interval -->
+              <!-- Checkpoint Interval -->
               <div v-if="form.syncPointsEnabled" class="ml-6">
                 <label class="block text-sm font-medium text-gray-700 mb-1">
-                  Sync Point Interval
+                  Checkpoint Interval
                 </label>
                 <select v-model="form.syncPointIntervalBytes" class="select">
                   <option :value="null">Auto (based on file size)</option>
@@ -566,21 +567,6 @@ async function resumeTransfer(transferId: string) {
                 </select>
                 <p class="text-xs text-gray-500 mt-1">
                   Auto: &lt;1MB=none, 1-10MB=256KB, 10-100MB=1MB, &gt;100MB=5MB
-                </p>
-              </div>
-
-              <!-- Resync -->
-              <div v-if="form.syncPointsEnabled">
-                <label class="flex items-center gap-2">
-                  <input 
-                    v-model="form.resyncEnabled" 
-                    type="checkbox" 
-                    class="rounded border-gray-300 text-primary-600"
-                  />
-                  <span class="text-sm font-medium text-gray-700">Enable Resynchronization</span>
-                </label>
-                <p class="text-xs text-gray-500 mt-1 ml-6">
-                  Allow resuming from last checkpoint if transfer fails
                 </p>
               </div>
 
