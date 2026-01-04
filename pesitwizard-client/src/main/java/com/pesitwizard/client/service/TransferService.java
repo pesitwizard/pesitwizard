@@ -1026,10 +1026,24 @@ public class TransferService {
                                                         lastProgressUpdate = System.currentTimeMillis();
                                                 }
                                         } else if (phase == 0xC0 && type == 0x22) {
-                                                // TRANS_END
+                                                // TRANS_END from server
+                                                log.debug("Received TRANS_END from server");
+                                                receiving = false;
+                                        } else if (phase == 0xC0 && type == 0x20) {
+                                                // CLOSE - end of transfer
+                                                log.debug("Received CLOSE from server");
+                                                receiving = false;
+                                        } else if (phase == 0x00 && type == 0x03) {
+                                                // DTF.END marker (empty DTF with end flag)
+                                                log.debug("Received DTF.END marker");
                                                 receiving = false;
                                         } else {
-                                                receiving = false;
+                                                // Unknown FPDU - log and continue for a bit
+                                                log.warn("Unexpected FPDU during receive: phase=0x{}, type=0x{}, length={}",
+                                                                String.format("%02X", phase),
+                                                                String.format("%02X", type),
+                                                                rawFpdu.length);
+                                                // Don't exit immediately - might be an info FPDU
                                         }
                                 }
                         }
