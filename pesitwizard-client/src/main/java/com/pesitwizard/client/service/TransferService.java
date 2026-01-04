@@ -1167,15 +1167,16 @@ public class TransferService {
                                         new Fpdu(FpduType.RELEASE).withIdDst(serverConnectionId).withIdSrc(connectionId)
                                                         .withParameter(new ParameterValue(PI_02_DIAG,
                                                                         new byte[] { 0x00, 0x00, 0x00 })));
-                } else if (restartEndCode == 4 && lastSyncPoint > 0) {
+                } else if (restartEndCode == 4) {
                         // PI 19 = 4: error, restart should follow - throw special exception
+                        // Restart from sync point 0 means restart from beginning
                         log.info("Transfer needs restart from sync point {} (byte position {})",
                                         lastSyncPoint, lastSyncPointBytePosition);
                         throw new RestartRequiredException(lastSyncPoint, lastSyncPointBytePosition, totalBytes);
                 } else {
-                        log.info("Transfer interrupted by server (PI 19={}) - cannot restart", restartEndCode);
-                        throw new IOException(
-                                        "Transfer interrupted by server (IDT received, PI 19=" + restartEndCode + ")");
+                        // PI 19 = 8 (suspension), 12 (server cancel), 16 (client cancel) - no restart
+                        log.warn("Transfer interrupted by server (PI 19={}) - no restart possible", restartEndCode);
+                        // Return bytes received so far - caller will handle as partial transfer
                 }
 
                 return totalBytes;
