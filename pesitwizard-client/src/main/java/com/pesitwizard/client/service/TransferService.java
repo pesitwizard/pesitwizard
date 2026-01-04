@@ -989,6 +989,7 @@ public class TransferService {
                 int lastSyncPoint = 0;
                 long lastProgressUpdate = System.currentTimeMillis();
                 final long PROGRESS_UPDATE_INTERVAL_MS = 100; // Update progress every 100ms max
+                boolean interrupted = false; // Track if transfer was interrupted by server
 
                 try (OutputStream connectorOut = connector.write(destPath, false)) {
                         boolean receiving = true;
@@ -1051,6 +1052,7 @@ public class TransferService {
                                                                         new byte[] { 0x00, 0x00, 0x00 }))
                                                         .withIdDst(serverConnectionId);
                                         session.sendFpdu(ackIdt);
+                                        interrupted = true; // Don't send cleanup commands after IDT
                                         receiving = false;
                                 } else {
                                         log.warn("Unexpected FPDU during receive: {}", fpduType);
@@ -1061,16 +1063,25 @@ public class TransferService {
                 progressService.sendProgress(historyId, totalBytes, expectedFileSize, lastSyncPoint);
                 log.info("Wrote {} bytes to connector in {} chunks", totalBytes, chunkCount);
 
-                // Cleanup: TRANS_END, CLOSE, DESELECT (file-level - no idSrc), RELEASE
-                // (session-level - with idSrc)
-                session.sendFpduWithAck(
-                                new Fpdu(FpduType.TRANS_END).withIdDst(serverConnectionId));
-                session.sendFpduWithAck(new Fpdu(FpduType.CLOSE).withIdDst(serverConnectionId)
-                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 })));
-                session.sendFpduWithAck(new Fpdu(FpduType.DESELECT).withIdDst(serverConnectionId)
-                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 })));
-                session.sendFpduWithAck(new Fpdu(FpduType.RELEASE).withIdDst(serverConnectionId).withIdSrc(connectionId)
-                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 })));
+                // Cleanup: only if not interrupted by server (IDT)
+                if (!interrupted) {
+                        // Normal cleanup: TRANS_END, CLOSE, DESELECT, RELEASE
+                        session.sendFpduWithAck(
+                                        new Fpdu(FpduType.TRANS_END).withIdDst(serverConnectionId));
+                        session.sendFpduWithAck(new Fpdu(FpduType.CLOSE).withIdDst(serverConnectionId)
+                                        .withParameter(new ParameterValue(PI_02_DIAG,
+                                                        new byte[] { 0x00, 0x00, 0x00 })));
+                        session.sendFpduWithAck(new Fpdu(FpduType.DESELECT).withIdDst(serverConnectionId)
+                                        .withParameter(new ParameterValue(PI_02_DIAG,
+                                                        new byte[] { 0x00, 0x00, 0x00 })));
+                        session.sendFpduWithAck(
+                                        new Fpdu(FpduType.RELEASE).withIdDst(serverConnectionId).withIdSrc(connectionId)
+                                                        .withParameter(new ParameterValue(PI_02_DIAG,
+                                                                        new byte[] { 0x00, 0x00, 0x00 })));
+                } else {
+                        log.info("Transfer interrupted by server - skipping cleanup commands");
+                        throw new IOException("Transfer interrupted by server (IDT received)");
+                }
 
                 return totalBytes;
         }
