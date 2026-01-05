@@ -189,12 +189,14 @@ public class ReceiveFileTest {
         try (PesitSession session = new PesitSession(new TcpTransportChannel(TEST_HOST, TEST_PORT));
                 RandomAccessFile raf = new RandomAccessFile(outputFile, "rw")) {
 
-            // CONNECT
-            System.out.println("Step 1: CONNECT (read access)");
+            // CONNECT with sync points enabled
+            System.out.println("Step 1: CONNECT (read access, sync points enabled)");
             ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
                     .demandeur("LOOP")
                     .serveur(serverId)
-                    .readAccess();
+                    .readAccess()
+                    .syncIntervalKb(4096) // Sync every 4 MB (larger = less overhead)
+                    .syncAckWindow(1); // Ack window of 1
             Fpdu aconnect = session.sendFpduWithAck(connectBuilder.build(clientConnectionId));
             assertEquals(FpduType.ACONNECT, aconnect.getFpduType());
             serverConnectionId = aconnect.getIdSrc();
@@ -256,22 +258,12 @@ public class ReceiveFileTest {
                             .withParameter(new ParameterValue(PI_20_NUM_SYNC, lastSyncPoint))
                             .withIdDst(serverConnectionId));
 
-                    // Interrupt after reaching target sync point
+                    // Interrupt after reaching target sync point by closing connection abruptly
                     if (lastSyncPoint >= targetSyncPoint) {
                         System.out.println("\n  >>> Interrupting after sync point " + lastSyncPoint + " <<<");
+                        System.out.println("  (Closing connection abruptly to simulate network failure)");
                         interrupted = true;
-
-                        // Send IDT (Interrupt Data Transfer)
-                        Fpdu idt = new Fpdu(FpduType.IDT)
-                                .withIdDst(serverConnectionId)
-                                .withParameter(new ParameterValue(PI_19_CODE_FIN_TRANSFERT, new byte[] { 0x04 })) // error
-                                                                                                                  // code
-                                .withParameter(new ParameterValue(PI_02_DIAG, new byte[] { 0x00, 0x00, 0x00 }));
-                        session.sendFpdu(idt);
-
-                        // Wait for ACK_IDT
-                        Fpdu ackIdt = session.receiveFpdu();
-                        System.out.println("  Received: " + ackIdt.getFpduType());
+                        // Just break out - the try-with-resources will close the connection
                     }
                 } else if (type == FpduType.DTF_END) {
                     System.out.println("  DTF_END received (file completed before target sync)");
@@ -294,22 +286,25 @@ public class ReceiveFileTest {
             raf.seek(lastSyncBytePosition);
             System.out.println("  Seeking to byte position: " + lastSyncBytePosition);
 
-            // CONNECT
-            System.out.println("\nStep 1: CONNECT (read access)");
+            // CONNECT with sync points enabled
+            System.out.println("\nStep 1: CONNECT (read access, sync points enabled)");
             ConnectMessageBuilder connectBuilder = new ConnectMessageBuilder()
                     .demandeur("LOOP")
                     .serveur(serverId)
-                    .readAccess();
+                    .readAccess()
+                    .syncIntervalKb(4096)
+                    .syncAckWindow(1);
             Fpdu aconnect = session.sendFpduWithAck(connectBuilder.build(clientConnectionId));
             assertEquals(FpduType.ACONNECT, aconnect.getFpduType());
             serverConnectionId = aconnect.getIdSrc();
             System.out.println("  ✓ Connected, server ID: " + serverConnectionId);
 
-            // SELECT
-            System.out.println("\nStep 2: SELECT");
+            // SELECT with restart flag
+            System.out.println("\nStep 2: SELECT (restart)");
             SelectMessageBuilder selectBuilder = new SelectMessageBuilder()
                     .filename(filename)
-                    .transferId(1);
+                    .transferId(1)
+                    .restart();
             Fpdu ackSelect = session.sendFpduWithAck(selectBuilder.build(serverConnectionId));
             assertEquals(FpduType.ACK_SELECT, ackSelect.getFpduType());
             System.out.println("  ✓ Selected file: " + filename);
