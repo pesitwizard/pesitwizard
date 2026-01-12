@@ -6,8 +6,14 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Parser for a single PeSIT FPDU.
- * Expects FPDU with header: [len(2)][phase][type][idDst][idSrc][params or data]
- * where len is the total FPDU length including the 2-byte length field.
+ * FPDU structure: [size (2 bytes, binary)][phase][type][idDst][idSrc][params or data]
+ *
+ * Note on IBM CX encoding:
+ * - Pre-connection message (24 bytes): PURE EBCDIC
+ * - FPDU messages: ALL fields are in ASCII/binary (no EBCDIC conversion needed)
+ *
+ * Note: The global frame length has been consumed by FpduIO.readRawFpdu(),
+ * but each FPDU inside the frame has its own 2-byte length prefix.
  */
 @Slf4j
 public class FpduParser {
@@ -16,11 +22,16 @@ public class FpduParser {
 
     public FpduParser(byte[] data) {
         this.buffer = ByteBuffer.wrap(data);
-        // Read FPDU length from header (first 2 bytes)
+        // Read FPDU length from header (first 2 bytes of the FPDU itself, always binary)
         this.fpduLength = buffer.getShort() & 0xFFFF;
         if (fpduLength != data.length) {
-            log.warn("FPDU length mismatch: header says {}, actual data is {} bytes", fpduLength, data.length);
+            log.warn("FPDU length mismatch: FPDU header says {}, actual data is {} bytes", fpduLength, data.length);
         }
+    }
+
+    @Deprecated
+    public FpduParser(byte[] data, boolean ebcdicEncoding) {
+        this(data); // Ignore ebcdicEncoding flag - FPDU parameters are ASCII
     }
 
     public Fpdu parse() {

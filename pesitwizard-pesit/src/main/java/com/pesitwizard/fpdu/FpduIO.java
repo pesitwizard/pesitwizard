@@ -14,9 +14,48 @@ import lombok.extern.slf4j.Slf4j;
 public class FpduIO {
 
     /**
+     * Read a single FPDU from the input stream with EBCDIC-aware length handling.
+     * IBM CX sends PURE EBCDIC where even the length prefix is EBCDIC-encoded.
+     * This method detects EBCDIC length prefix and handles it correctly.
+     *
+     * @param in DataInputStream to read from
+     * @return Raw FPDU bytes (without the length prefix, still in original encoding)
+     * @throws IOException if read fails or connection closed
+     */
+    public static byte[] readRawFpduWithEbcdicDetection(DataInputStream in) throws IOException {
+        // Read first 2 bytes (length prefix)
+        byte[] lengthBytes = new byte[2];
+        in.readFully(lengthBytes);
+
+        // Check if length bytes are EBCDIC (both bytes >= 0x80 suggests EBCDIC)
+        boolean lengthIsEbcdic = (lengthBytes[0] & 0xFF) >= 0x80 && (lengthBytes[1] & 0xFF) >= 0x80;
+
+        int length;
+        if (lengthIsEbcdic) {
+            // Convert EBCDIC length bytes to ASCII, then interpret as binary
+            byte[] asciiLengthBytes = EbcdicConverter.ebcdicToAscii(lengthBytes);
+            length = ((asciiLengthBytes[0] & 0xFF) << 8) | (asciiLengthBytes[1] & 0xFF);
+            log.debug("Detected EBCDIC length prefix: {:02X} {:02X} (EBCDIC) -> {:02X} {:02X} (ASCII) -> {} bytes",
+                lengthBytes[0] & 0xFF, lengthBytes[1] & 0xFF,
+                asciiLengthBytes[0] & 0xFF, asciiLengthBytes[1] & 0xFF, length);
+        } else {
+            // Standard binary length prefix
+            length = ((lengthBytes[0] & 0xFF) << 8) | (lengthBytes[1] & 0xFF);
+        }
+
+        if (length <= 0 || length > 65535) {
+            throw new IOException("Invalid FPDU length: " + length);
+        }
+
+        byte[] data = new byte[length];
+        in.readFully(data);
+        return data;
+    }
+
+    /**
      * Read a single FPDU from the input stream.
      * Reads the 2-byte length prefix, then the FPDU data.
-     * 
+     *
      * @param in DataInputStream to read from
      * @return Raw FPDU bytes (without the length prefix)
      * @throws IOException if read fails or connection closed

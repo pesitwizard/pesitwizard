@@ -149,4 +149,11 @@ public abstract class AbstractSocketTransportChannel implements TransportChannel
     public int getPort() {
         return port;
     }
+
+    /**
+     * Get the input stream for reading data
+     */
+    public DataInputStream getInputStream() {
+        return inputStream;
+    }
 }
