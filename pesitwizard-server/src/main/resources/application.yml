@@ -171,7 +171,17 @@ pesitwizard:
         access-type: BOTH  # READ, WRITE, or BOTH
         max-connections: 10
         allowed-files: []  # Empty = all files allowed
-      
+
+      # IBM CX Client
+      CXCLIENT:
+        id: CXCLIENT
+        description: IBM Sterling Connect:Express client
+        enabled: true
+        password: test123
+        access-type: BOTH
+        max-connections: 10
+        allowed-files: []
+
       # Example partner with password
       SECURE_PARTNER:
         id: SECURE_PARTNER
@@ -269,7 +279,7 @@ pesitwizard:
 # Security Configuration
 pesitwizard.security:
   # Enable security (set to false to disable all authentication)
-  enabled: true
+  enabled: false
   
   # Authentication mode: oauth2, apikey, basic, or mixed
   mode: mixed

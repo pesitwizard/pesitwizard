@@ -1,0 +1,28 @@
+pesit:
+  server:
+    enabled: true
+    server-id: PESITSERVER
+    port: 6502
+    max-connections: 10
+    strict-partner-check: false  # Allow any partner for initial testing
+    protocol-version: 2
+  security:
+    enabled: false  # Disable security for integration testing
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  h2:
+    console:
+      enabled: true
+
+logging:
+  level:
+    com.pesitwizard: DEBUG
+
+server:
+  port: 8080

@@ -10,7 +10,11 @@ import java.net.SocketTimeoutException;
 
 import javax.net.ssl.SSLSocket;
 
+import com.pesitwizard.fpdu.EbcdicConverter;
+import com.pesitwizard.fpdu.Fpdu;
+import com.pesitwizard.fpdu.FpduBuilder;
 import com.pesitwizard.fpdu.FpduIO;
+import com.pesitwizard.fpdu.FpduParser;
 import com.pesitwizard.server.config.PesitServerProperties;
 import com.pesitwizard.server.model.SessionContext;
 import com.pesitwizard.server.state.ServerState;
@@ -70,18 +74,51 @@ public class TcpConnectionHandler implements Runnable {
             while (!socket.isClosed() && sessionActive) {
 
                 try {
-                    // Read FPDU using library helper
-                    byte[] fpduData = FpduIO.readRawFpdu(in);
+                    // Read raw data from network
+                    byte[] rawData = FpduIO.readRawFpdu(in);
 
-                    // Log raw bytes for debugging
-                    int[] phaseType = FpduIO.getPhaseAndType(fpduData);
-                    if (phaseType != null) {
-                        log.debug("[{}] Received {} bytes, phase=0x{}, type=0x{}",
-                                sessionContext.getSessionId(), fpduData.length,
-                                String.format("%02X", phaseType[0]), String.format("%02X", phaseType[1]));
-                    } else {
-                        log.debug("[{}] Received {} bytes", sessionContext.getSessionId(), fpduData.length);
+                    // DEBUG: Log raw bytes
+                    if (rawData.length >= 8) {
+                        log.debug("[{}] Raw FPDU bytes [0-7]: {} {} {} {} {} {} {} {}",
+                            sessionContext.getSessionId(),
+                            String.format("%02X", rawData[0] & 0xFF),
+                            String.format("%02X", rawData[1] & 0xFF),
+                            String.format("%02X", rawData[2] & 0xFF),
+                            String.format("%02X", rawData[3] & 0xFF),
+                            String.format("%02X", rawData[4] & 0xFF),
+                            String.format("%02X", rawData[5] & 0xFF),
+                            String.format("%02X", rawData[6] & 0xFF),
+                            String.format("%02X", rawData[7] & 0xFF));
                     }
+
+                    // Handle pre-connection handshake (IBM CX compatibility)
+                    // This is a 24-byte PURE EBCDIC message that comes BEFORE the CONNECT FPDU
+                    if (!sessionContext.isPreConnectionHandled() && rawData.length == 24) {
+                        // Check if it's EBCDIC (pre-connection message)
+                        boolean isEbcdic = EbcdicConverter.isEbcdic(rawData);
+                        if (isEbcdic) {
+                            byte[] asciiData = EbcdicConverter.toAscii(rawData);
+                            String preConnMsg = new String(asciiData).trim();
+                            if (preConnMsg.startsWith("PESIT")) {
+                                sessionContext.setEbcdicEncoding(true);
+                                log.info("[{}] Client uses EBCDIC encoding (IBM mainframe)", sessionContext.getSessionId());
+                                handlePreConnection(asciiData, out);
+                                sessionContext.setPreConnectionHandled(true);
+                                continue; // Read next message (the actual CONNECT FPDU)
+                            }
+                        }
+                    }
+
+                    // Parse FPDU - header is binary, but string parameters may be in EBCDIC
+                    FpduParser parser = new FpduParser(rawData, sessionContext.isEbcdicEncoding());
+                    Fpdu fpdu = parser.parse();
+
+                    log.debug("[{}] Received FPDU: type={} (encoding: {})",
+                        sessionContext.getSessionId(), fpdu.getFpduType(),
+                        sessionContext.isEbcdicEncoding() ? "EBCDIC" : "ASCII");
+
+                    // Convert back to bytes for existing handler (TODO: refactor handler to work with Fpdu objects)
+                    byte[] fpduData = FpduBuilder.buildFpdu(fpdu);
 
                     // Process the FPDU (may stream data directly to output for READ)
                     byte[] response = null;
@@ -94,8 +131,14 @@ public class TcpConnectionHandler implements Runnable {
 
                     // Send response if any (READ streams directly, so response may be null)
                     if (response != null) {
-                        FpduIO.writeRawFpdu(out, response);
-                        log.debug("[{}] Sent {} bytes", sessionContext.getSessionId(), response.length);
+                        // Convert response to client encoding (EBCDIC if needed)
+                        byte[] encodedResponse = EbcdicConverter.toClientEncoding(
+                            response, sessionContext.isEbcdicEncoding());
+
+                        FpduIO.writeRawFpdu(out, encodedResponse);
+                        log.debug("[{}] Sent {} bytes (encoding: {})",
+                            sessionContext.getSessionId(), encodedResponse.length,
+                            sessionContext.isEbcdicEncoding() ? "EBCDIC" : "ASCII");
                     }
 
                     // Check if session ended normally (RELCONF sent or ABORT)
@@ -136,6 +179,37 @@ public class TcpConnectionHandler implements Runnable {
         } catch (IOException e) {
             log.warn("Error closing socket: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Handle pre-connection handshake (IBM CX compatibility)
+     *
+     * Message format (24 bytes, EBCDIC encoded):
+     * - 8 bytes: Protocol identifier ("PESIT   ")
+     * - 8 bytes: Client identifier (e.g., "CXCLIENT")
+     * - 8 bytes: Password (e.g., "TEST123 ")
+     *
+     * Response: "ACK0" (4 bytes in EBCDIC)
+     */
+    private void handlePreConnection(byte[] asciiData, DataOutputStream out) throws IOException {
+        // Parse the 24-byte message
+        String protocol = new String(asciiData, 0, 8).trim();
+        String identifier = new String(asciiData, 8, 8).trim();
+        String password = new String(asciiData, 16, 8).trim();
+
+        log.info("[{}] Pre-connection handshake: protocol={}, identifier={}, password={}",
+            sessionContext.getSessionId(), protocol, identifier, password.replaceAll(".", "*"));
+
+        // Send ACK0 response in EBCDIC (without frame length prefix)
+        byte[] ack = "ACK0".getBytes();
+        byte[] ebcdicAck = EbcdicConverter.toClientEncoding(ack, true);
+
+        // Write ACK0 with frame length prefix
+        out.writeShort(4); // Frame length
+        out.write(ebcdicAck);
+        out.flush();
+
+        log.info("[{}] Sent pre-connection ACK0", sessionContext.getSessionId());
     }
 
     /**

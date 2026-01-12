@@ -87,6 +87,12 @@ public class SessionContext {
     /** Message filename for segmented message reception */
     private String messageFilename;
 
+    /** Client uses EBCDIC encoding (IBM mainframe compatibility) */
+    private boolean ebcdicEncoding = false;
+
+    /** Pre-connection handshake was processed (IBM CX compatibility) */
+    private boolean preConnectionHandled = false;
+
     /**
      * Create a new session context
      */
