@@ -2,65 +2,7 @@
 
 Le serveur PeSIT Wizard permet de recevoir des fichiers de partenaires externes. Il est conçu pour être déployé sur Kubernetes avec haute disponibilité.
 
-## Déploiement recommandé : via pesitwizard-admin
-
-La méthode recommandée est d'utiliser la console d'administration qui gère automatiquement le déploiement Kubernetes.
-
-### 1. Installer pesitwizard-admin
-
-```bash
-docker-compose up -d
-```
-
-Avec `docker-compose.yml` :
-
-```yaml
-version: '3.8'
-
-services:
-  pesitwizard-admin:
-    image: ghcr.io/cpoder/pesitwizard-admin:latest
-    ports:
-      - "9080:9080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pesitwizard
-      SPRING_DATASOURCE_USERNAME: pesitwizard
-      SPRING_DATASOURCE_PASSWORD: pesitwizard
-    volumes:
-      - ~/.kube:/root/.kube:ro  # Accès au cluster K8s
-
-  pesitwizard-admin-ui:
-    image: ghcr.io/cpoder/pesitwizard-admin-ui:latest
-    ports:
-      - "3000:80"
-
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: pesitwizard
-      POSTGRES_USER: pesitwizard
-      POSTGRES_PASSWORD: pesitwizard
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-
-volumes:
-  postgres-data:
-```
-
-### 2. Créer un cluster via l'interface
-
-1. Accédez à http://localhost:3000
-2. Cliquez sur **Ajouter un cluster**
-3. Renseignez :
-   - **Nom** : Production PeSIT Wizard
-   - **Namespace** : pesitwizard-prod
-   - **Environnement** : Production
-   - **Replicas** : 3
-   - **Image** : ghcr.io/cpoder/pesitwizard-server:latest
-4. Cliquez sur **Créer**
-5. Cliquez sur **Déployer**
-
-## Déploiement manuel : Docker
+## Déploiement Docker
 
 Pour un déploiement simple sans Kubernetes :
 
@@ -77,7 +19,7 @@ docker run -d \
   ghcr.io/cpoder/pesitwizard-server:latest
 ```
 
-## Déploiement manuel : Kubernetes
+## Déploiement Kubernetes
 
 ### Créer le namespace
 

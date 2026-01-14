@@ -62,21 +62,6 @@ Le **serveur** permet de recevoir des fichiers de partenaires externes.
 - Fichiers virtuels
 - Clustering haute disponibilité
 
-### Console d'administration
-
-La **console** permet de gérer les déploiements de serveurs PeSIT Wizard sur Kubernetes.
-
-| Composant | Description | Port |
-|-----------|-------------|------|
-| pesitwizard-admin | Backend Spring Boot | 9080 |
-| pesitwizard-admin-ui | Interface Vue.js | 3000 |
-
-**Fonctionnalités** :
-- Création/suppression de clusters
-- Déploiement sur Kubernetes
-- Configuration des partenaires
-- Monitoring des pods
-
 ## Déploiement Kubernetes
 
 ```
