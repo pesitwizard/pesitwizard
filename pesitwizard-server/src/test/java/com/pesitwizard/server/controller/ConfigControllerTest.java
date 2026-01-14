@@ -51,7 +51,7 @@ class ConfigControllerTest {
         @BeforeEach
         void setUp() {
             testPartner = new Partner();
-            testPartner.setId("partner-1");
+            testPartner.setId("PARTNER1");
             testPartner.setDescription("Test Partner");
             testPartner.setEnabled(true);
         }
@@ -63,17 +63,17 @@ class ConfigControllerTest {
 
             mockMvc.perform(get("/api/v1/config/partners"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$[0].id").value("partner-1"));
+                    .andExpect(jsonPath("$[0].id").value("PARTNER1"));
         }
 
         @Test
         @DisplayName("should get partner by ID")
         void shouldGetPartnerById() throws Exception {
-            when(configService.getPartner("partner-1")).thenReturn(Optional.of(testPartner));
+            when(configService.getPartner("PARTNER1")).thenReturn(Optional.of(testPartner));
 
-            mockMvc.perform(get("/api/v1/config/partners/partner-1"))
+            mockMvc.perform(get("/api/v1/config/partners/PARTNER1"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.id").value("partner-1"));
+                    .andExpect(jsonPath("$.id").value("PARTNER1"));
         }
 
         @Test
@@ -88,19 +88,19 @@ class ConfigControllerTest {
         @Test
         @DisplayName("should create partner")
         void shouldCreatePartner() throws Exception {
-            when(configService.partnerExists("partner-1")).thenReturn(false);
+            when(configService.partnerExists("PARTNER1")).thenReturn(false);
             when(configService.savePartner(any(Partner.class))).thenReturn(testPartner);
 
             mockMvc.perform(post("/api/v1/config/partners").contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(testPartner)))
                     .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.id").value("partner-1"));
+                    .andExpect(jsonPath("$.id").value("PARTNER1"));
         }
 
         @Test
         @DisplayName("should return 409 when creating duplicate partner")
         void shouldReturn409ForDuplicate() throws Exception {
-            when(configService.partnerExists("partner-1")).thenReturn(true);
+            when(configService.partnerExists("PARTNER1")).thenReturn(true);
 
             mockMvc.perform(post("/api/v1/config/partners").contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(testPartner)))
@@ -110,10 +110,10 @@ class ConfigControllerTest {
         @Test
         @DisplayName("should update partner")
         void shouldUpdatePartner() throws Exception {
-            when(configService.partnerExists("partner-1")).thenReturn(true);
+            when(configService.partnerExists("PARTNER1")).thenReturn(true);
             when(configService.savePartner(any(Partner.class))).thenReturn(testPartner);
 
-            mockMvc.perform(put("/api/v1/config/partners/partner-1").contentType(MediaType.APPLICATION_JSON)
+            mockMvc.perform(put("/api/v1/config/partners/PARTNER1").contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(testPartner)))
                     .andExpect(status().isOk());
         }
@@ -121,10 +121,10 @@ class ConfigControllerTest {
         @Test
         @DisplayName("should delete partner")
         void shouldDeletePartner() throws Exception {
-            when(configService.partnerExists("partner-1")).thenReturn(true);
-            doNothing().when(configService).deletePartner("partner-1");
+            when(configService.partnerExists("PARTNER1")).thenReturn(true);
+            doNothing().when(configService).deletePartner("PARTNER1");
 
-            mockMvc.perform(delete("/api/v1/config/partners/partner-1"))
+            mockMvc.perform(delete("/api/v1/config/partners/PARTNER1"))
                     .andExpect(status().isNoContent());
         }
 
@@ -147,7 +147,7 @@ class ConfigControllerTest {
         @BeforeEach
         void setUp() {
             testFile = new VirtualFile();
-            testFile.setId("file-1");
+            testFile.setId("FILE1");
             testFile.setDescription("test.dat");
             testFile.setEnabled(true);
         }
@@ -159,23 +159,23 @@ class ConfigControllerTest {
 
             mockMvc.perform(get("/api/v1/config/files"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$[0].id").value("file-1"));
+                    .andExpect(jsonPath("$[0].id").value("FILE1"));
         }
 
         @Test
         @DisplayName("should get virtual file by ID")
         void shouldGetVirtualFileById() throws Exception {
-            when(configService.getVirtualFile("file-1")).thenReturn(Optional.of(testFile));
+            when(configService.getVirtualFile("FILE1")).thenReturn(Optional.of(testFile));
 
-            mockMvc.perform(get("/api/v1/config/files/file-1"))
+            mockMvc.perform(get("/api/v1/config/files/FILE1"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.id").value("file-1"));
+                    .andExpect(jsonPath("$.id").value("FILE1"));
         }
 
         @Test
         @DisplayName("should create virtual file")
         void shouldCreateVirtualFile() throws Exception {
-            when(configService.virtualFileExists("file-1")).thenReturn(false);
+            when(configService.virtualFileExists("FILE1")).thenReturn(false);
             when(configService.saveVirtualFile(any(VirtualFile.class))).thenReturn(testFile);
 
             mockMvc.perform(post("/api/v1/config/files").contentType(MediaType.APPLICATION_JSON)
@@ -186,10 +186,10 @@ class ConfigControllerTest {
         @Test
         @DisplayName("should update virtual file")
         void shouldUpdateVirtualFile() throws Exception {
-            when(configService.virtualFileExists("file-1")).thenReturn(true);
+            when(configService.virtualFileExists("FILE1")).thenReturn(true);
             when(configService.saveVirtualFile(any(VirtualFile.class))).thenReturn(testFile);
 
-            mockMvc.perform(put("/api/v1/config/files/file-1").contentType(MediaType.APPLICATION_JSON)
+            mockMvc.perform(put("/api/v1/config/files/FILE1").contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(testFile)))
                     .andExpect(status().isOk());
         }
@@ -197,10 +197,10 @@ class ConfigControllerTest {
         @Test
         @DisplayName("should delete virtual file")
         void shouldDeleteVirtualFile() throws Exception {
-            when(configService.virtualFileExists("file-1")).thenReturn(true);
-            doNothing().when(configService).deleteVirtualFile("file-1");
+            when(configService.virtualFileExists("FILE1")).thenReturn(true);
+            doNothing().when(configService).deleteVirtualFile("FILE1");
 
-            mockMvc.perform(delete("/api/v1/config/files/file-1"))
+            mockMvc.perform(delete("/api/v1/config/files/FILE1"))
                     .andExpect(status().isNoContent());
         }
     }

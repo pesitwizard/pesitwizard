@@ -57,7 +57,7 @@ class PesitServerManagerTest {
 
         testConfig = new PesitServerConfig();
         testConfig.setId(1L);
-        testConfig.setServerId("server-1");
+        testConfig.setServerId("SERVER1");
         testConfig.setPort(5100);
         testConfig.setStatus(ServerStatus.STOPPED);
     }
@@ -69,21 +69,21 @@ class PesitServerManagerTest {
         @Test
         @DisplayName("should create server config")
         void shouldCreateServer() {
-            when(configRepository.existsByServerId("server-1")).thenReturn(false);
+            when(configRepository.existsByServerId("SERVER1")).thenReturn(false);
             when(configRepository.existsByPort(5100)).thenReturn(false);
             when(configRepository.save(any(PesitServerConfig.class))).thenReturn(testConfig);
 
             PesitServerConfig result = serverManager.createServer(testConfig);
 
             assertNotNull(result);
-            assertEquals("server-1", result.getServerId());
+            assertEquals("SERVER1", result.getServerId());
             verify(configRepository).save(testConfig);
         }
 
         @Test
         @DisplayName("should throw when server ID already exists")
         void shouldThrowWhenServerIdExists() {
-            when(configRepository.existsByServerId("server-1")).thenReturn(true);
+            when(configRepository.existsByServerId("SERVER1")).thenReturn(true);
 
             assertThrows(IllegalArgumentException.class,
                     () -> serverManager.createServer(testConfig));
@@ -92,7 +92,7 @@ class PesitServerManagerTest {
         @Test
         @DisplayName("should throw when port already in use")
         void shouldThrowWhenPortInUse() {
-            when(configRepository.existsByServerId("server-1")).thenReturn(false);
+            when(configRepository.existsByServerId("SERVER1")).thenReturn(false);
             when(configRepository.existsByPort(5100)).thenReturn(true);
 
             assertThrows(IllegalArgumentException.class,
@@ -107,18 +107,18 @@ class PesitServerManagerTest {
             List<PesitServerConfig> servers = serverManager.getAllServers();
 
             assertEquals(1, servers.size());
-            assertEquals("server-1", servers.get(0).getServerId());
+            assertEquals("SERVER1", servers.get(0).getServerId());
         }
 
         @Test
         @DisplayName("should get server by ID")
         void shouldGetServerById() {
-            when(configRepository.findByServerId("server-1")).thenReturn(Optional.of(testConfig));
+            when(configRepository.findByServerId("SERVER1")).thenReturn(Optional.of(testConfig));
 
-            Optional<PesitServerConfig> result = serverManager.getServer("server-1");
+            Optional<PesitServerConfig> result = serverManager.getServer("SERVER1");
 
             assertTrue(result.isPresent());
-            assertEquals("server-1", result.get().getServerId());
+            assertEquals("SERVER1", result.get().getServerId());
         }
 
         @Test
@@ -134,9 +134,9 @@ class PesitServerManagerTest {
         @Test
         @DisplayName("should delete server")
         void shouldDeleteServer() {
-            when(configRepository.findByServerId("server-1")).thenReturn(Optional.of(testConfig));
+            when(configRepository.findByServerId("SERVER1")).thenReturn(Optional.of(testConfig));
 
-            serverManager.deleteServer("server-1");
+            serverManager.deleteServer("SERVER1");
 
             verify(configRepository).delete(testConfig);
         }
@@ -159,9 +159,9 @@ class PesitServerManagerTest {
         @DisplayName("should get server status")
         void shouldGetServerStatus() {
             testConfig.setStatus(ServerStatus.RUNNING);
-            when(configRepository.findByServerId("server-1")).thenReturn(Optional.of(testConfig));
+            when(configRepository.findByServerId("SERVER1")).thenReturn(Optional.of(testConfig));
 
-            ServerStatus status = serverManager.getServerStatus("server-1");
+            ServerStatus status = serverManager.getServerStatus("SERVER1");
 
             assertEquals(ServerStatus.RUNNING, status);
         }
@@ -180,7 +180,7 @@ class PesitServerManagerTest {
         @DisplayName("should check if server is running")
         void shouldCheckIfServerRunning() {
             // Server not in runningServers map
-            boolean running = serverManager.isServerRunning("server-1");
+            boolean running = serverManager.isServerRunning("SERVER1");
 
             assertFalse(running);
         }
@@ -189,7 +189,7 @@ class PesitServerManagerTest {
         @DisplayName("should get active connections")
         void shouldGetActiveConnections() {
             // Server not running
-            int connections = serverManager.getActiveConnections("server-1");
+            int connections = serverManager.getActiveConnections("SERVER1");
 
             assertEquals(0, connections);
         }
@@ -242,10 +242,10 @@ class PesitServerManagerTest {
             updates.setBindAddress("127.0.0.1");
             updates.setMaxConnections(50);
 
-            when(configRepository.findByServerId("server-1")).thenReturn(Optional.of(testConfig));
+            when(configRepository.findByServerId("SERVER1")).thenReturn(Optional.of(testConfig));
             when(configRepository.save(any(PesitServerConfig.class))).thenReturn(testConfig);
 
-            PesitServerConfig result = serverManager.updateServer("server-1", updates);
+            PesitServerConfig result = serverManager.updateServer("SERVER1", updates);
 
             assertNotNull(result);
             verify(configRepository).save(any(PesitServerConfig.class));
@@ -266,11 +266,11 @@ class PesitServerManagerTest {
             PesitServerConfig updates = new PesitServerConfig();
             updates.setPort(5200); // Different port
 
-            when(configRepository.findByServerId("server-1")).thenReturn(Optional.of(testConfig));
+            when(configRepository.findByServerId("SERVER1")).thenReturn(Optional.of(testConfig));
             when(configRepository.existsByPort(5200)).thenReturn(true);
 
             assertThrows(IllegalArgumentException.class,
-                    () -> serverManager.updateServer("server-1", updates));
+                    () -> serverManager.updateServer("SERVER1", updates));
         }
     }
 }

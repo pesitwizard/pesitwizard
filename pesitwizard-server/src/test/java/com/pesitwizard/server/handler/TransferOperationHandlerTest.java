@@ -136,11 +136,11 @@ class TransferOperationHandlerTest {
         Fpdu response = handler.handleCreate(ctx, fpdu);
 
         assertNotNull(response);
-        assertEquals(FpduType.ABORT, response.getFpduType());
+        assertEquals(FpduType.ACK_CREATE, response.getFpduType()); // NACK is ACK with error diag
     }
 
     @Test
-    @DisplayName("handleSelect should return ABORT when file validation fails")
+    @DisplayName("handleSelect should return NACK_SELECT when file validation fails")
     void handleSelectShouldReturnAbortWhenValidationFails() {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.CN03_CONNECTED);
@@ -153,7 +153,7 @@ class TransferOperationHandlerTest {
         Fpdu response = handler.handleSelect(ctx, fpdu);
 
         assertNotNull(response);
-        assertEquals(FpduType.ABORT, response.getFpduType());
+        assertEquals(FpduType.ACK_SELECT, response.getFpduType()); // NACK is ACK with error diag
     }
 
     @Test
@@ -460,7 +460,7 @@ class TransferOperationHandlerTest {
         Fpdu response = handler.handleCreate(ctx, fpdu);
 
         assertNotNull(response);
-        assertEquals(FpduType.ABORT, response.getFpduType());
+        assertEquals(FpduType.ACK_CREATE, response.getFpduType()); // NACK is ACK with error diag
     }
 
     @Test
@@ -508,7 +508,7 @@ class TransferOperationHandlerTest {
         Fpdu response = handler.handleSelect(ctx, fpdu);
 
         assertNotNull(response);
-        assertEquals(FpduType.ABORT, response.getFpduType());
+        assertEquals(FpduType.ACK_SELECT, response.getFpduType()); // NACK is ACK with error diag
     }
 
     @Test

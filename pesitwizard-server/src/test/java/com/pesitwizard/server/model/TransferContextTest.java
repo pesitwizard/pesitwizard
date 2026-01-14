@@ -36,11 +36,11 @@ class TransferContextTest {
 
         context.appendData(data1);
         assertEquals(data1.length, context.getBytesTransferred());
-        assertEquals(1, context.getRecordsTransferred());
+        // Note: recordsTransferred is now managed by DataTransferHandler, not
+        // appendData
 
         context.appendData(data2);
         assertEquals(data1.length + data2.length, context.getBytesTransferred());
-        assertEquals(2, context.getRecordsTransferred());
 
         context.closeOutputStream();
     }
@@ -138,7 +138,8 @@ class TransferContextTest {
         context.openOutputStream();
         context.appendData(new byte[0]);
         assertEquals(0, context.getBytesTransferred());
-        assertEquals(1, context.getRecordsTransferred()); // Still counts as a record
+        // Note: recordsTransferred is now managed by DataTransferHandler, not
+        // appendData
         context.closeOutputStream();
     }
 

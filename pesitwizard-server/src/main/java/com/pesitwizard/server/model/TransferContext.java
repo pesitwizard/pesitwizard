@@ -143,7 +143,7 @@ public class TransferContext {
         }
         fileOutputStream.write(data);
         bytesTransferred += data.length;
-        recordsTransferred++;
+        // Note: recordsTransferred is managed by the caller (DataTransferHandler)
     }
 
     /**

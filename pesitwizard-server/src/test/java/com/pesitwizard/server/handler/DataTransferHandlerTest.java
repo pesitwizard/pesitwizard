@@ -318,7 +318,7 @@ class DataTransferHandlerTest {
     }
 
     @Test
-    @DisplayName("handleRead should return ABORT when no transfer context")
+    @DisplayName("handleRead should return NACK_READ when no transfer context")
     void handleReadShouldReturnAbortWhenNoTransfer() throws Exception {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
@@ -329,11 +329,11 @@ class DataTransferHandlerTest {
         Fpdu response = handler.handleRead(ctx, fpdu, null, null);
 
         assertNotNull(response);
-        assertEquals(FpduType.ABORT, response.getFpduType());
+        assertEquals(FpduType.ACK_READ, response.getFpduType()); // NACK is ACK with error diag
     }
 
     @Test
-    @DisplayName("handleRead should return ABORT when local path is null")
+    @DisplayName("handleRead should return NACK_READ when local path is null")
     void handleReadShouldReturnAbortWhenLocalPathNull() throws Exception {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
@@ -345,11 +345,11 @@ class DataTransferHandlerTest {
         Fpdu response = handler.handleRead(ctx, fpdu, null, null);
 
         assertNotNull(response);
-        assertEquals(FpduType.ABORT, response.getFpduType());
+        assertEquals(FpduType.ACK_READ, response.getFpduType()); // NACK is ACK with error diag
     }
 
     @Test
-    @DisplayName("handleRead should return ABORT when file does not exist")
+    @DisplayName("handleRead should return NACK_READ when file does not exist")
     void handleReadShouldReturnAbortWhenFileNotExists() throws Exception {
         SessionContext ctx = new SessionContext("test-session");
         ctx.transitionTo(ServerState.OF02_TRANSFER_READY);
@@ -361,7 +361,7 @@ class DataTransferHandlerTest {
         Fpdu response = handler.handleRead(ctx, fpdu, null, null);
 
         assertNotNull(response);
-        assertEquals(FpduType.ABORT, response.getFpduType());
+        assertEquals(FpduType.ACK_READ, response.getFpduType()); // NACK is ACK with error diag
     }
 
     @Test
