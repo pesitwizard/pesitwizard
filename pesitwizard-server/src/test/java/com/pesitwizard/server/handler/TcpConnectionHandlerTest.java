@@ -169,7 +169,6 @@ class TcpConnectionHandlerTest {
 
     @Test
     @DisplayName("run should close socket when not already closed")
-    @org.junit.jupiter.api.Disabled("TODO: Fix mock behavior for connection flow")
     void runShouldCloseSocketWhenNotAlreadyClosed() throws Exception {
         when(socket.getRemoteSocketAddress()).thenReturn(socketAddress);
         when(socketAddress.toString()).thenReturn("127.0.0.1:12345");
@@ -178,9 +177,9 @@ class TcpConnectionHandlerTest {
         SessionContext ctx = new SessionContext("test-session");
         when(sessionHandler.createSession(anyString(), anyString())).thenReturn(ctx);
 
-        // First call in loop returns false, then true for isClosed check in
-        // closeConnection
-        when(socket.isClosed()).thenReturn(true, false);
+        // First call in loop returns false (socket open), then false again for
+        // closeConnection check
+        when(socket.isClosed()).thenReturn(false, false);
         ByteArrayInputStream emptyInput = new ByteArrayInputStream(new byte[0]);
         when(socket.getInputStream()).thenReturn(emptyInput);
         when(socket.getOutputStream()).thenReturn(new ByteArrayOutputStream());
